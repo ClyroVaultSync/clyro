@@ -1,0 +1,22 @@
+{
+  "name": "@clyro/backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fastify": "^4.20.0",
+    "@prisma/client": "^5.0.0",
+    "@clyro/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "prisma": "^5.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.1",
+    "@types/node": "^20.0.0"
+  }
+}
