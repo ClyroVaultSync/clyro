@@ -1123,6 +1123,8 @@ Trust is granted to the device—not permanently to the browser installation.
 
 A trusted device is registered only after successful user authentication.
 
+Device registration is not a separate API call — the client submits device metadata (deviceIdentifier, deviceName, platform, browser) as part of the POST /api/v1/auth/login request body. The backend creates the TrustedDevice record automatically on first login from a new device, and attaches every session to its originating device.
+
 
 
 Each device receives its own identity within the user's account.

@@ -282,13 +282,29 @@ No
 
 {
 
-&#x20; "email": "user@example.com",
+  "email": "user@example.com",
 
-&#x20; "password": "StrongPassword123!"
+  "password": "StrongPassword123!",
+
+  "device": {
+
+    "deviceIdentifier": "client-generated-uuid-or-fingerprint",
+
+    "deviceName": "Chrome on Windows",
+
+    "platform": "Windows",
+
+    "browser": "Chrome 126"
+
+  }
 
 }
 
 ```
+
+
+
+Note: The `device` object is required on every login request. `deviceIdentifier` should be a stable, client-generated identifier (e.g. a UUID persisted in extension/browser storage) unique per device. On successful login, if no TrustedDevice record exists matching this deviceIdentifier for the authenticated user, one is created automatically. The resulting session is always tied to a specific trusted device.
 
 
 
