@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@clyro/shared-types": "workspace:*",
+    "@fastify/jwt": "^8.0.1",
     "@prisma/client": "^5.22.0",
     "fastify": "^4.20.0",
     "libsodium": "^0.8.4",

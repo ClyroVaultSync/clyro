@@ -1,16 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fastify from 'fastify';
+import jwt from '@fastify/jwt';
 import authRoutes from './auth';
 import { prisma } from '../db';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { verifyPassword } from '../services/authPassword';
 
 // Mock the Prisma client
 vi.mock('../db', () => ({
   prisma: {
     user: {
       create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    trustedDevice: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    session: {
+      create: vi.fn(),
     },
   },
+}));
+
+vi.mock('../services/authPassword', () => ({
+  hashPassword: vi.fn().mockResolvedValue('fakehash'),
+  verifyPassword: vi.fn(),
 }));
 
 describe('Auth Routes', () => {
@@ -19,6 +36,7 @@ describe('Auth Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = fastify();
+    app.register(jwt, { secret: 'test-secret' });
     app.register(authRoutes, { prefix: '/api/v1/auth' });
   });
 
@@ -133,6 +151,109 @@ describe('Auth Routes', () => {
         code: 'VALIDATION_ERROR',
         message: 'Password must be at least 8 characters',
       },
+    });
+  });
+
+  describe('Login Route', () => {
+    const validLoginPayload = {
+      email: 'test@example.com',
+      password: 'Password123!',
+      device: {
+        deviceIdentifier: 'device-123',
+        deviceName: 'Chrome',
+        platform: 'Windows',
+        browser: 'Chrome 126',
+      },
+    };
+
+    it('should return 200 with tokens on successful login', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', passwordHash: 'hash' } as never);
+      vi.mocked(verifyPassword).mockResolvedValue(true);
+      vi.mocked(prisma.trustedDevice.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.trustedDevice.create).mockResolvedValue({ id: 'dev-1' } as never);
+      vi.mocked(prisma.session.create).mockResolvedValue({ id: 'sess-1' } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: validLoginPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toHaveProperty('accessToken');
+      expect(json.data).toHaveProperty('refreshToken');
+      expect(json.data.expiresIn).toBe(900);
+    });
+
+    it('should return 401 INVALID_CREDENTIALS on wrong password', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', passwordHash: 'hash' } as never);
+      vi.mocked(verifyPassword).mockResolvedValue(false);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: validLoginPayload,
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' }
+      });
+    });
+
+    it('should return 401 INVALID_CREDENTIALS on non-existent email', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: validLoginPayload,
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' }
+      });
+    });
+
+    it('should return 422 VALIDATION_ERROR on missing device object', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: {
+          email: 'test@example.com',
+          password: 'Password123!',
+        },
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().success).toBe(false);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should update lastSeenAt on existing trusted device instead of creating a new one', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', passwordHash: 'hash' } as never);
+      vi.mocked(verifyPassword).mockResolvedValue(true);
+      vi.mocked(prisma.trustedDevice.findFirst).mockResolvedValue({ id: 'dev-existing' } as never);
+      vi.mocked(prisma.trustedDevice.update).mockResolvedValue({ id: 'dev-existing' } as never);
+      vi.mocked(prisma.session.create).mockResolvedValue({ id: 'sess-1' } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: validLoginPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.trustedDevice.create).not.toHaveBeenCalled();
+      expect(prisma.trustedDevice.update).toHaveBeenCalledWith({
+        where: { id: 'dev-existing' },
+        data: { lastSeenAt: expect.any(Date) },
+      });
     });
   });
 });
