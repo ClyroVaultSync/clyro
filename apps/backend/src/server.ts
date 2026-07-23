@@ -1,8 +1,13 @@
 import fastify from 'fastify';
+import routes from './routes';
 
 const server = fastify();
 
-server.listen({ port: 8080 }, (err, address) => {
+server.register(routes);
+
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
+
+server.listen({ port: PORT }, (err, address) => {
   if (err) {
     console.error(err);
     process.exit(1);
