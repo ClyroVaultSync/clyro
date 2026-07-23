@@ -10,10 +10,11 @@
   },
   "dependencies": {
     "@clyro/shared-types": "workspace:*",
-    "@prisma/client": "^5.0.0",
+    "@prisma/client": "^5.22.0",
     "fastify": "^4.20.0",
     "libsodium": "^0.8.4",
-    "libsodium-wrappers-sumo": "^0.8.4"
+    "libsodium-wrappers-sumo": "^0.8.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.14",
