@@ -334,17 +334,45 @@ Note: The `device` object is required on every login request. `deviceIdentifier`
 
 \## Refresh Session
 
-
-
-Issue a new access token using a valid refresh token.
-
-
+Issues a new access token (and rotates the refresh token) using a valid, unexpired refresh token.
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/refresh
+
+\*\*Authentication Required\*\*
+
+No (the refresh token itself is the credential)
+
+\*\*Request Body\*\*
+
+```json
+{
+  "refreshToken": "<raw refresh token string>"
+}
+```
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "...",
+    "refreshToken": "...",
+    "expiresIn": 900
+  }
+}
+```
+
+Note: Refresh tokens are rotated on every use — the response always contains a NEW refresh token, and the previous one becomes invalid immediately. Clients must persist the new refresh token and discard the old one.
+
+\*\*Error Responses\*\*
+
+- 401 INVALID_REFRESH_TOKEN — token does not match any active session
+- 401 REFRESH_TOKEN_EXPIRED — session found but has expired
+- 401 SESSION_REVOKED — session found but has been revoked (isActive: false)
+- 422 VALIDATION_ERROR — missing or malformed refreshToken field
 
 
 
