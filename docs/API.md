@@ -458,17 +458,41 @@ None
 
 \## Verify Email
 
-
-
-Verify the user's email address.
-
-
+Verifies a user's email address using the token sent to them after registration.
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/verify-email
+
+\*\*Authentication Required\*\*
+
+No
+
+\*\*Request Body\*\*
+
+```json
+{
+  "token": "<raw verification token string>"
+}
+```
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Email verified successfully." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 INVALID_TOKEN — token does not match any verification record
+- 401 TOKEN_EXPIRED — token found but has expired
+- 401 TOKEN_ALREADY_USED — token has already been used
+- 422 VALIDATION_ERROR — missing or malformed token field
+
+Note: Email delivery of the verification token is currently stubbed (logged server-side) — no email provider is configured yet. This will be replaced with a real email service in a future task without changing this endpoint's contract.
 
 
 
@@ -478,17 +502,40 @@ POST /api/v1/auth/verify-email
 
 \## Request Password Reset
 
-
-
-Generate a password reset token.
-
-
+Initiates a password reset by generating a reset token for the given email, if an account with that email exists.
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/request-password-reset
+
+\*\*Authentication Required\*\*
+
+No
+
+\*\*Request Body\*\*
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "If an account exists with this email, a password reset link has been sent." }
+}
+```
+
+Note: This endpoint ALWAYS returns success with this same generic message, regardless of whether the email exists in the system. This prevents attackers from using this endpoint to discover which emails are registered (user enumeration protection).
+
+\*\*Error Responses\*\*
+
+- 422 VALIDATION_ERROR — malformed email field
+
+Note: Email delivery of the reset token is currently stubbed (logged server-side) — no email provider is configured yet.
 
 
 
@@ -498,17 +545,40 @@ POST /api/v1/auth/request-password-reset
 
 \## Reset Password
 
-
-
-Reset the account password using a valid reset token.
-
-
+Resets a user's password using a valid reset token, then invalidates all of that user's existing sessions (forcing re-login everywhere, since the old password may have been compromised).
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/reset-password
+
+\*\*Authentication Required\*\*
+
+No
+
+\*\*Request Body\*\*
+
+```json
+{
+  "token": "<raw reset token string>",
+  "newPassword": "NewStrongPassword123!"
+}
+```
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Password reset successfully. Please log in again." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 INVALID_TOKEN — token does not match any reset record
+- 401 TOKEN_EXPIRED — token found but has expired
+- 401 TOKEN_ALREADY_USED — token has already been used
+- 422 VALIDATION_ERROR — missing/malformed token, or newPassword under 8 characters
 
 ---
 
