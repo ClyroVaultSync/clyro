@@ -778,25 +778,46 @@ The Devices API allows users to view and manage trusted devices associated with 
 
 \## Get Trusted Devices
 
-
-
-Retrieve all trusted devices.
-
-
+Retrieves all trusted devices associated with the authenticated user's account.
 
 \*\*Endpoint\*\*
 
-
-
 GET /api/v1/devices
-
-
 
 \*\*Authentication Required\*\*
 
+Yes (Authorization: Bearer <accessToken>)
 
+\*\*Request Body\*\*
 
-Yes
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": {
+    "devices": [
+      {
+        "id": "uuid",
+        "deviceName": "Chrome on Windows",
+        "platform": "Windows",
+        "browser": "Chrome 126",
+        "lastSeenAt": "2026-07-24T10:00:00.000Z",
+        "trustedSince": "2026-01-01T00:00:00.000Z",
+        "isActive": true
+      }
+    ]
+  }
+}
+```
+
+Note: deviceIdentifier and lastIp are NOT included in the response — deviceIdentifier is an internal matching key, and lastIp is sensitive metadata not exposed to the client.
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
 
 
 
@@ -806,25 +827,41 @@ Yes
 
 \## Get Device Details
 
-
-
-Retrieve information about a specific trusted device.
-
-
+Retrieves details for a single trusted device belonging to the authenticated user.
 
 \*\*Endpoint\*\*
 
-
-
 GET /api/v1/devices/{deviceId}
-
-
 
 \*\*Authentication Required\*\*
 
+Yes (Authorization: Bearer <accessToken>)
 
+\*\*Request Body\*\*
 
-Yes
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "deviceName": "Chrome on Windows",
+    "platform": "Windows",
+    "browser": "Chrome 126",
+    "lastSeenAt": "2026-07-24T10:00:00.000Z",
+    "trustedSince": "2026-01-01T00:00:00.000Z",
+    "isActive": true
+  }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — device does not exist, or does not belong to the authenticated user
 
 
 
@@ -834,29 +871,33 @@ Yes
 
 \## Revoke Device
 
-
-
-Remove a trusted device from the account.
-
-
-
-Revoking a device immediately prevents future synchronization and authentication from that device.
-
-
+Revokes a trusted device, immediately preventing future synchronization and authentication from that device. Also revokes any active sessions tied to this device.
 
 \*\*Endpoint\*\*
 
-
-
 DELETE /api/v1/devices/{deviceId}
-
-
 
 \*\*Authentication Required\*\*
 
+Yes (Authorization: Bearer <accessToken>)
 
+\*\*Request Body\*\*
 
-Yes
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Device revoked successfully." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — device does not exist, or does not belong to the authenticated user
 
 
 
@@ -878,25 +919,45 @@ The Sessions API manages authenticated sessions.
 
 \## Get Active Sessions
 
-
-
-Retrieve all active sessions.
-
-
+Retrieves all active sessions belonging to the authenticated user, each linked to its originating device.
 
 \*\*Endpoint\*\*
 
-
-
 GET /api/v1/sessions
-
-
 
 \*\*Authentication Required\*\*
 
+Yes (Authorization: Bearer <accessToken>)
 
+\*\*Request Body\*\*
 
-Yes
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "id": "uuid",
+        "deviceId": "uuid",
+        "deviceName": "Chrome on Windows",
+        "createdAt": "2026-07-24T09:00:00.000Z",
+        "lastActivityAt": "2026-07-24T10:00:00.000Z",
+        "expiresAt": "2026-08-23T09:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+Note: refreshTokenHash is NEVER included in this or any response.
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
 
 
 
@@ -906,25 +967,33 @@ Yes
 
 \## Revoke Session
 
-
-
-Terminate a single authenticated session.
-
-
+Terminates a single active session belonging to the authenticated user.
 
 \*\*Endpoint\*\*
 
-
-
 DELETE /api/v1/sessions/{sessionId}
-
-
 
 \*\*Authentication Required\*\*
 
+Yes (Authorization: Bearer <accessToken>)
 
+\*\*Request Body\*\*
 
-Yes
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Session revoked successfully." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — session does not exist, or does not belong to the authenticated user
 
 
 
@@ -934,25 +1003,7 @@ Yes
 
 \## Revoke All Sessions
 
-
-
-logout-all terminates every active session belonging to the user, including the session that issued the request. This ensures a complete, unambiguous logout across all devices when requested.
-
-
-
-\*\*Endpoint\*\*
-
-
-
-POST /api/v1/sessions/revoke-all
-
-
-
-\*\*Authentication Required\*\*
-
-
-
-Yes
+This functionality is provided by POST /api/v1/auth/logout-all (see Authentication section). This endpoint has been removed to avoid duplicate functionality.
 
 
 
