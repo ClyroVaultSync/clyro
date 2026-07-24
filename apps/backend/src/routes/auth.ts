@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { registerSchema, loginSchema } from '../services/authValidation';
+import { registerSchema, loginSchema, refreshSchema } from '../services/authValidation';
 import { hashPassword, verifyPassword } from '../services/authPassword';
 import { generateRefreshToken, hashRefreshToken } from '../services/refreshToken';
 import { prisma } from '../db';
@@ -120,6 +120,64 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(422).send(errorResponse('VALIDATION_ERROR', message));
       }
       console.error('Unexpected error during login:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  fastify.post('/refresh', async (request, reply) => {
+    try {
+      const parsed = refreshSchema.parse(request.body);
+      const incomingHash = hashRefreshToken(parsed.refreshToken);
+
+      const session = await prisma.session.findFirst({
+        where: { refreshTokenHash: incomingHash },
+      });
+
+      if (!session) {
+        return reply.status(401).send(errorResponse('INVALID_REFRESH_TOKEN', 'Invalid refresh token.'));
+      }
+
+      if (!session.isActive || session.revokedAt) {
+        return reply.status(401).send(errorResponse('SESSION_REVOKED', 'This session has been revoked.'));
+      }
+
+      if (session.expiresAt < new Date()) {
+        return reply.status(401).send(errorResponse('REFRESH_TOKEN_EXPIRED', 'Refresh token has expired.'));
+      }
+
+      // Rotate: issue new refresh token, invalidate old one
+      const newRawRefreshToken = generateRefreshToken();
+      const newRefreshTokenHash = hashRefreshToken(newRawRefreshToken);
+      const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+      await prisma.session.update({
+        where: { id: session.id },
+        data: {
+          refreshTokenHash: newRefreshTokenHash,
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+          lastActivityAt: new Date(),
+        },
+      });
+
+      const ACCESS_TOKEN_TTL_SECONDS = 900;
+      const accessToken = fastify.jwt.sign(
+        { userId: session.userId, sessionId: session.id },
+        { expiresIn: ACCESS_TOKEN_TTL_SECONDS }
+      );
+
+      return reply.status(200).send(
+        successResponse({
+          accessToken,
+          refreshToken: newRawRefreshToken,
+          expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+        })
+      );
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const message = error.issues[0]?.message || 'Validation error';
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', message));
+      }
+      console.error('Unexpected error during token refresh:', error);
       return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
     }
   });

@@ -21,6 +21,8 @@ vi.mock('../db', () => ({
     },
     session: {
       create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -254,6 +256,110 @@ describe('Auth Routes', () => {
         where: { id: 'dev-existing' },
         data: { lastSeenAt: expect.any(Date) },
       });
+    });
+  });
+
+  describe('Refresh Route', () => {
+    it('should return 200 with new tokens on valid refresh token', async () => {
+      vi.mocked(prisma.session.findFirst).mockResolvedValue({
+        id: 'sess-1',
+        userId: 'user-1',
+        isActive: true,
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 100000),
+      } as never);
+      vi.mocked(prisma.session.update).mockResolvedValue({} as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        payload: {
+          refreshToken: 'old-refresh-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toHaveProperty('accessToken');
+      expect(json.data).toHaveProperty('refreshToken');
+      expect(json.data.refreshToken).not.toBe('old-refresh-token');
+      expect(json.data.expiresIn).toBe(900);
+    });
+
+    it('should return 401 INVALID_REFRESH_TOKEN on unknown/invalid token', async () => {
+      vi.mocked(prisma.session.findFirst).mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        payload: {
+          refreshToken: 'invalid-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        success: false,
+        error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid refresh token.' },
+      });
+    });
+
+    it('should return 401 SESSION_REVOKED on revoked session (isActive: false)', async () => {
+      vi.mocked(prisma.session.findFirst).mockResolvedValue({
+        id: 'sess-1',
+        isActive: false,
+        revokedAt: null,
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        payload: {
+          refreshToken: 'revoked-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        success: false,
+        error: { code: 'SESSION_REVOKED', message: 'This session has been revoked.' },
+      });
+    });
+
+    it('should return 401 REFRESH_TOKEN_EXPIRED on expired session', async () => {
+      vi.mocked(prisma.session.findFirst).mockResolvedValue({
+        id: 'sess-1',
+        isActive: true,
+        revokedAt: null,
+        expiresAt: new Date(Date.now() - 1000), // In the past
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        payload: {
+          refreshToken: 'expired-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        success: false,
+        error: { code: 'REFRESH_TOKEN_EXPIRED', message: 'Refresh token has expired.' },
+      });
+    });
+
+    it('should return 422 VALIDATION_ERROR on missing refreshToken field', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        payload: {}, // Missing refreshToken
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().success).toBe(false);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
   });
 });
