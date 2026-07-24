@@ -138,6 +138,12 @@ Unauthenticated endpoints include:
 
 All other endpoints require authentication.
 
+Protected endpoints require the access token to be passed via the Authorization header using the Bearer scheme:
+
+Authorization: Bearer <accessToken>
+
+Requests missing this header, or presenting an invalid/expired access token, receive a 401 UNAUTHORIZED response.
+
 
 
 \---
@@ -382,17 +388,32 @@ Note: Refresh tokens are rotated on every use — the response always contains a
 
 \## Logout
 
-
-
-Invalidate the current session.
-
-
+Invalidates the current session (the one tied to the presented access token).
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/logout
+
+\*\*Authentication Required\*\*
+
+Yes (Authorization: Bearer <accessToken>)
+
+\*\*Request Body\*\*
+
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Logged out successfully." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
 
 
 
@@ -402,17 +423,32 @@ POST /api/v1/auth/logout
 
 \## Logout From All Devices
 
-
-
-Invalidate every active session belonging to the user.
-
-
+Invalidates every active session belonging to the authenticated user, including the current session. The user will need to log in again on all devices.
 
 \*\*Endpoint\*\*
 
-
-
 POST /api/v1/auth/logout-all
+
+\*\*Authentication Required\*\*
+
+Yes (Authorization: Bearer <accessToken>)
+
+\*\*Request Body\*\*
+
+None
+
+\*\*Success Response (200)\*\*
+
+```json
+{
+  "success": true,
+  "data": { "message": "Logged out of all devices." }
+}
+```
+
+\*\*Error Responses\*\*
+
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
 
 
 
@@ -830,7 +866,7 @@ Yes
 
 
 
-Terminate every active session except the current one.
+logout-all terminates every active session belonging to the user, including the session that issued the request. This ensures a complete, unambiguous logout across all devices when requested.
 
 
 
