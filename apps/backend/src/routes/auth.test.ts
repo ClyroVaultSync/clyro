@@ -26,6 +26,18 @@ vi.mock('../db', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    verificationToken: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    passwordResetToken: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    $transaction: vi.fn(async (args) => {
+      return Promise.all(args);
+    }),
   },
 }));
 
@@ -447,6 +459,231 @@ describe('Auth Routes', () => {
 
       expect(response.statusCode).toBe(401);
       expect(response.json().error.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('Verify Email Route', () => {
+    it('should return 200 on successful verification', async () => {
+      vi.mocked(prisma.verificationToken.findFirst).mockResolvedValue({
+        id: 'token-1',
+        userId: 'user-1',
+        tokenHash: 'hash',
+        tokenType: 'EMAIL',
+        expiresAt: new Date(Date.now() + 10000),
+        usedAt: null,
+        createdAt: new Date(),
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify-email',
+        payload: { token: 'valid-token' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().success).toBe(true);
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { emailVerified: true },
+      });
+      expect(prisma.verificationToken.update).toHaveBeenCalledWith({
+        where: { id: 'token-1' },
+        data: { usedAt: expect.any(Date) },
+      });
+    });
+
+    it('should return 401 INVALID_TOKEN on invalid token', async () => {
+      vi.mocked(prisma.verificationToken.findFirst).mockResolvedValue(null as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify-email',
+        payload: { token: 'invalid-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('should return 401 TOKEN_ALREADY_USED on already used token', async () => {
+      vi.mocked(prisma.verificationToken.findFirst).mockResolvedValue({
+        usedAt: new Date(),
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify-email',
+        payload: { token: 'used-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('TOKEN_ALREADY_USED');
+    });
+
+    it('should return 401 TOKEN_EXPIRED on expired token', async () => {
+      vi.mocked(prisma.verificationToken.findFirst).mockResolvedValue({
+        usedAt: null,
+        expiresAt: new Date(Date.now() - 10000),
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify-email',
+        payload: { token: 'expired-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('TOKEN_EXPIRED');
+    });
+
+    it('should return 422 VALIDATION_ERROR on missing token field', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify-email',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Request Password Reset Route', () => {
+    it('should return 200 generic success and create token on existing email', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', email: 'exist@example.com' } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/request-password-reset',
+        payload: { email: 'exist@example.com' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().success).toBe(true);
+      expect(prisma.passwordResetToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-1',
+            expiresAt: expect.any(Date),
+          }),
+        })
+      );
+    });
+
+    it('should return 200 generic success without creating token on non-existent email', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/request-password-reset',
+        payload: { email: 'nonexistent@example.com' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().success).toBe(true);
+      expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 422 VALIDATION_ERROR on malformed email', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/request-password-reset',
+        payload: { email: 'not-an-email' },
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Reset Password Route', () => {
+    it('should return 200 on successful reset and revoke sessions', async () => {
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
+        id: 'token-1',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 10000),
+        usedAt: null,
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/reset-password',
+        payload: { token: 'valid-token', newPassword: 'NewStrongPassword123!' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().success).toBe(true);
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-1' },
+          data: { passwordHash: 'fakehash' },
+        })
+      );
+      expect(prisma.passwordResetToken.update).toHaveBeenCalledWith({
+        where: { id: 'token-1' },
+        data: { usedAt: expect.any(Date) },
+      });
+      expect(prisma.session.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isActive: true },
+        data: { isActive: false, revokedAt: expect.any(Date) },
+      });
+    });
+
+    it('should return 401 INVALID_TOKEN on invalid reset token', async () => {
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue(null as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/reset-password',
+        payload: { token: 'invalid-token', newPassword: 'NewStrongPassword123!' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('should return 401 TOKEN_ALREADY_USED on already used reset token', async () => {
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
+        usedAt: new Date(),
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/reset-password',
+        payload: { token: 'used-token', newPassword: 'NewStrongPassword123!' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('TOKEN_ALREADY_USED');
+    });
+
+    it('should return 401 TOKEN_EXPIRED on expired reset token', async () => {
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
+        usedAt: null,
+        expiresAt: new Date(Date.now() - 10000),
+      } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/reset-password',
+        payload: { token: 'expired-token', newPassword: 'NewStrongPassword123!' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('TOKEN_EXPIRED');
+    });
+
+    it('should return 422 VALIDATION_ERROR on weak password', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/reset-password',
+        payload: { token: 'valid-token', newPassword: 'weak' },
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
   });
 });

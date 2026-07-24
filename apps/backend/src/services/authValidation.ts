@@ -27,3 +27,20 @@ export const refreshSchema = z.object({
 });
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

@@ -1,9 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { registerSchema, loginSchema, refreshSchema } from '../services/authValidation';
+import {
+  registerSchema,
+  loginSchema,
+  refreshSchema,
+  verifyEmailSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+} from '../services/authValidation';
 import { hashPassword, verifyPassword } from '../services/authPassword';
-import { generateRefreshToken, hashRefreshToken } from '../services/refreshToken';
+import {
+  generateToken,
+  hashToken,
+  generateRefreshToken,
+  hashRefreshToken,
+} from '../services/tokenUtils';
 import { prisma } from '../db';
 import { successResponse, errorResponse } from '../utils/response';
 
@@ -210,6 +222,112 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.status(200).send(successResponse({ message: 'Logged out of all devices.' }));
     } catch (error) {
       console.error('Unexpected error during logout-all:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  fastify.post('/verify-email', async (request, reply) => {
+    try {
+      const parsed = verifyEmailSchema.parse(request.body);
+      const tokenHash = hashToken(parsed.token);
+
+      const record = await prisma.verificationToken.findFirst({
+        where: { tokenHash, tokenType: 'EMAIL' },
+      });
+
+      if (!record) {
+        return reply.status(401).send(errorResponse('INVALID_TOKEN', 'Invalid verification token.'));
+      }
+      if (record.usedAt) {
+        return reply.status(401).send(errorResponse('TOKEN_ALREADY_USED', 'This token has already been used.'));
+      }
+      if (record.expiresAt < new Date()) {
+        return reply.status(401).send(errorResponse('TOKEN_EXPIRED', 'This token has expired.'));
+      }
+
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } }),
+        prisma.verificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      ]);
+
+      return reply.status(200).send(successResponse({ message: 'Email verified successfully.' }));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
+      }
+      console.error('Unexpected error during email verification:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  fastify.post('/request-password-reset', async (request, reply) => {
+    try {
+      const parsed = requestPasswordResetSchema.parse(request.body);
+      const user = await prisma.user.findUnique({ where: { email: parsed.email } });
+
+      // Always respond with the same generic success message, whether or not the user exists,
+      // to prevent user enumeration (per docs/API.md).
+      if (user) {
+        const rawToken = generateToken();
+        const tokenHash = hashToken(rawToken);
+        const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+        await prisma.passwordResetToken.create({
+          data: {
+            userId: user.id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+          },
+        });
+
+        // STUBBED EMAIL DELIVERY — no email provider configured yet.
+        // In production this token would be emailed as a reset link, never logged.
+        console.log(`[STUB EMAIL] Password reset token for ${user.email}: ${rawToken}`);
+      }
+
+      return reply.status(200).send(
+        successResponse({ message: 'If an account exists with this email, a password reset link has been sent.' })
+      );
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
+      }
+      console.error('Unexpected error during password reset request:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  fastify.post('/reset-password', async (request, reply) => {
+    try {
+      const parsed = resetPasswordSchema.parse(request.body);
+      const tokenHash = hashToken(parsed.token);
+
+      const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash } });
+
+      if (!record) {
+        return reply.status(401).send(errorResponse('INVALID_TOKEN', 'Invalid reset token.'));
+      }
+      if (record.usedAt) {
+        return reply.status(401).send(errorResponse('TOKEN_ALREADY_USED', 'This token has already been used.'));
+      }
+      if (record.expiresAt < new Date()) {
+        return reply.status(401).send(errorResponse('TOKEN_EXPIRED', 'This token has expired.'));
+      }
+
+      const newPasswordHash = await hashPassword(parsed.newPassword);
+
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: record.userId }, data: { passwordHash: newPasswordHash } }),
+        prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+        prisma.session.updateMany({ where: { userId: record.userId, isActive: true }, data: { isActive: false, revokedAt: new Date() } }),
+      ]);
+
+      return reply.status(200).send(successResponse({ message: 'Password reset successfully. Please log in again.' }));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
+      }
+      console.error('Unexpected error during password reset:', error);
       return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
     }
   });
