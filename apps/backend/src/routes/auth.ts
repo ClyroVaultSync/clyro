@@ -181,4 +181,36 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
     }
   });
+
+  fastify.post('/logout', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { sessionId } = request.user as { userId: string; sessionId: string };
+
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { isActive: false, revokedAt: new Date() },
+      });
+
+      return reply.status(200).send(successResponse({ message: 'Logged out successfully.' }));
+    } catch (error) {
+      console.error('Unexpected error during logout:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  fastify.post('/logout-all', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+
+      await prisma.session.updateMany({
+        where: { userId, isActive: true },
+        data: { isActive: false, revokedAt: new Date() },
+      });
+
+      return reply.status(200).send(successResponse({ message: 'Logged out of all devices.' }));
+    } catch (error) {
+      console.error('Unexpected error during logout-all:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
 }

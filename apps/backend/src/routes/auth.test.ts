@@ -5,6 +5,7 @@ import authRoutes from './auth';
 import { prisma } from '../db';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { verifyPassword } from '../services/authPassword';
+import authenticatePlugin from '../plugins/authenticate';
 
 // Mock the Prisma client
 vi.mock('../db', () => ({
@@ -23,6 +24,7 @@ vi.mock('../db', () => ({
       create: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -35,11 +37,13 @@ vi.mock('../services/authPassword', () => ({
 describe('Auth Routes', () => {
   let app: ReturnType<typeof fastify>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     app = fastify();
     app.register(jwt, { secret: 'test-secret' });
+    app.register(authenticatePlugin);
     app.register(authRoutes, { prefix: '/api/v1/auth' });
+    await app.ready();
   });
 
   it('should return 201 on successful registration', async () => {
@@ -360,6 +364,89 @@ describe('Auth Routes', () => {
       expect(response.statusCode).toBe(422);
       expect(response.json().success).toBe(false);
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Logout Route', () => {
+    it('should return 200 on successful logout', async () => {
+      const token = app.jwt.sign({ userId: 'user-1', sessionId: 'sess-1' });
+      vi.mocked(prisma.session.update).mockResolvedValue({} as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        success: true,
+        data: { message: 'Logged out successfully.' },
+      });
+      expect(prisma.session.update).toHaveBeenCalledWith({
+        where: { id: 'sess-1' },
+        data: { isActive: false, revokedAt: expect.any(Date) },
+      });
+    });
+
+    it('should return 401 UNAUTHORIZED when missing header', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should return 401 UNAUTHORIZED on invalid token', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+        headers: {
+          authorization: 'Bearer invalid-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('Logout-All Route', () => {
+    it('should return 200 on successful logout-all', async () => {
+      const token = app.jwt.sign({ userId: 'user-1', sessionId: 'sess-1' });
+      vi.mocked(prisma.session.updateMany).mockResolvedValue({ count: 2 } as never);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout-all',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        success: true,
+        data: { message: 'Logged out of all devices.' },
+      });
+      expect(prisma.session.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isActive: true },
+        data: { isActive: false, revokedAt: expect.any(Date) },
+      });
+    });
+
+    it('should return 401 UNAUTHORIZED when missing header', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout-all',
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
     });
   });
 });
