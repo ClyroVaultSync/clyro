@@ -1,0 +1,152 @@
+import type { FastifyInstance } from 'fastify';
+import { ZodError } from 'zod';
+import { createVaultSchema, updateVaultSchema } from '../services/vaultValidation';
+import { prisma } from '../db';
+import { successResponse, errorResponse } from '../utils/response';
+
+function serializeVault(vault: {
+  id: string; userId: string; encryptedVault: string; vaultVersion: number;
+  lastModified: Date; createdAt: Date; updatedAt: Date;
+}) {
+  return {
+    id: vault.id,
+    userId: vault.userId,
+    encryptedVault: vault.encryptedVault,
+    vaultVersion: vault.vaultVersion,
+    lastModified: vault.lastModified.toISOString(),
+    createdAt: vault.createdAt.toISOString(),
+    updatedAt: vault.updatedAt.toISOString(),
+  };
+}
+
+export default async function vaultRoutes(fastify: FastifyInstance) {
+  // GET /api/v1/vault
+  fastify.get('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+      const vault = await prisma.vault.findUnique({ where: { userId } });
+
+      if (!vault) {
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+      }
+
+      return reply.status(200).send(successResponse(serializeVault(vault)));
+    } catch (error) {
+      console.error('Unexpected error retrieving vault:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  // GET /api/v1/vault/metadata
+  fastify.get('/metadata', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+      const vault = await prisma.vault.findUnique({
+        where: { userId },
+        select: { vaultVersion: true, lastModified: true },
+      });
+
+      if (!vault) {
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+      }
+
+      return reply.status(200).send(successResponse({
+        vaultVersion: vault.vaultVersion,
+        lastModified: vault.lastModified.toISOString(),
+      }));
+    } catch (error) {
+      console.error('Unexpected error retrieving vault metadata:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  // POST /api/v1/vault
+  fastify.post('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+      const parsed = createVaultSchema.parse(request.body);
+
+      const existing = await prisma.vault.findUnique({ where: { userId } });
+      if (existing) {
+        return reply.status(409).send(errorResponse('CONFLICT', 'A vault already exists for this user. Use PUT to update instead.'));
+      }
+
+      const vault = await prisma.vault.create({
+        data: {
+          userId,
+          encryptedVault: parsed.encryptedVault,
+          vaultVersion: parsed.vaultVersion,
+        },
+      });
+
+      return reply.status(201).send(successResponse(serializeVault(vault)));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
+      }
+      console.error('Unexpected error creating vault:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  // PUT /api/v1/vault
+  fastify.put('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+      const parsed = updateVaultSchema.parse(request.body);
+
+      const existing = await prisma.vault.findUnique({ where: { userId } });
+      if (!existing) {
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user. Use POST to create one first.'));
+      }
+
+      // Optimistic concurrency control: reject stale updates
+      if (parsed.vaultVersion <= existing.vaultVersion) {
+        return reply.status(409).send(errorResponse(
+          'CONFLICT',
+          'Version conflict: your vault version is out of date.',
+          {
+            serverVersion: existing.vaultVersion,
+            lastModified: existing.lastModified.toISOString(),
+          }
+        ));
+      }
+
+      const vault = await prisma.vault.update({
+        where: { userId },
+        data: {
+          encryptedVault: parsed.encryptedVault,
+          vaultVersion: parsed.vaultVersion,
+          lastModified: new Date(),
+        },
+      });
+
+      return reply.status(200).send(successResponse(serializeVault(vault)));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
+      }
+      console.error('Unexpected error updating vault:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+
+  // DELETE /api/v1/vault
+  fastify.delete('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    try {
+      const { userId } = request.user as { userId: string; sessionId: string };
+
+      const existing = await prisma.vault.findUnique({ where: { userId } });
+      if (!existing) {
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+      }
+
+      await prisma.vault.delete({ where: { userId } });
+
+      return reply.status(200).send(successResponse({ message: 'Vault deleted successfully.' }));
+    } catch (error) {
+      console.error('Unexpected error deleting vault:', error);
+      return reply.status(500).send(errorResponse('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+    }
+  });
+}
