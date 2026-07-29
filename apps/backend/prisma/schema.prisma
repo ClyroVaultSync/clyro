@@ -24,9 +24,7 @@ model User {
   verificationTokens  VerificationToken[]
   passwordResetTokens PasswordResetToken[]
 
-  // NOTE: One-to-one relation to Vault (owned by the Vault & Sync track)
-  // must be added here once the Vault model exists on that track's branch.
-  // Example once available: vault Vault?
+  vault Vault?
 
   @@map("users")
 }
@@ -103,4 +101,17 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
+}
+
+model Vault {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  encryptedVault String   @map("encrypted_vault")
+  vaultVersion   Int      @default(1) @map("vault_version")
+  lastModified   DateTime @default(now()) @map("last_modified")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("vaults")
 }
