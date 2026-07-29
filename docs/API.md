@@ -600,127 +600,167 @@ The backend stores encrypted vaults but never decrypts them.
 
 
 
-\## Get Vault
+\**GET /api/v1/vault**
 
+Retrieves the authenticated user's encrypted vault.
 
+Auth Required: Yes (Authorization: Bearer <accessToken>)
+Request Body: None
 
-Download the latest encrypted vault.
-
-
-
-\*\*Endpoint\*\*
-
-
-
-GET /api/v1/vault
-
-
-
-\*\*Authentication Required\*\*
-
-
-
-Yes
-
-
-
-\---
-
-
-
-\## Update Vault
-
-
-
-Upload the latest encrypted vault.
-
-
-
-\*\*Endpoint\*\*
-
-
-
-PUT /api/v1/vault
-
-
-
-\*\*Authentication Required\*\*
-
-
-
-Yes
-
-
-
-\*\*Request Body\*\*
-
-
-
+Success Response (200):
 ```json
-
 {
-
-&#x20; "encryptedVault": "...",
-
-&#x20; "vaultVersion": 15
-
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "encryptedVault": "<opaque encrypted blob>",
+    "vaultVersion": 15,
+    "lastModified": "2026-07-18T14:00:00.000Z",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-07-18T14:00:00.000Z"
+  }
 }
-
 ```
 
+Error Responses:
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — no vault exists yet for this user
 
+---
 
-\---
+**PUT /api/v1/vault**
 
+Synchronizes (updates) the user's vault with a new encrypted payload, using optimistic concurrency control (see docs/DATABASE.md Synchronization Strategy).
 
-
-\## Get Vault Metadata
-
-
-
-Retrieve vault synchronization metadata without downloading the full encrypted vault.
-
-
-
-\*\*Endpoint\*\*
-
-
-
-GET /api/v1/vault/metadata
-
-
-
-\*\*Authentication Required\*\*
-
-
-
-Yes
-
-
-
-\*\*Response\*\*
-
-
-
+Auth Required: Yes (Authorization: Bearer <accessToken>)
+Request Body:
 ```json
-
 {
-
-&#x20; "vaultVersion": 15,
-
-&#x20; "lastModified": "2026-07-18T14:00:00Z"
-
+  "encryptedVault": "<opaque encrypted blob>",
+  "vaultVersion": 16
 }
-
 ```
 
+Success Response (200):
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "encryptedVault": "<opaque encrypted blob>",
+    "vaultVersion": 16,
+    "lastModified": "2026-07-24T15:00:00.000Z",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-07-24T15:00:00.000Z"
+  }
+}
+```
 
+Error Responses:
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — no vault exists yet for this user (client should POST to create one first)
+- 409 CONFLICT — submitted vaultVersion is not strictly newer than the stored version. Response includes the current server state so the client can resolve:
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "Version conflict: your vault version is out of date.",
+    "details": {
+      "serverVersion": 16,
+      "lastModified": "2026-07-24T15:00:00.000Z"
+    }
+  }
+}
+```
+- 422 VALIDATION_ERROR — missing/malformed encryptedVault or vaultVersion
 
-\---
+---
 
+**GET /api/v1/vault/metadata**
 
+Retrieves lightweight sync metadata without downloading the full encrypted vault — used by clients to check if a local sync is needed before downloading the full payload.
 
-\# Synchronization Rules
+Auth Required: Yes (Authorization: Bearer <accessToken>)
+Request Body: None
+
+Success Response (200):
+```json
+{
+  "success": true,
+  "data": {
+    "vaultVersion": 15,
+    "lastModified": "2026-07-18T14:00:00.000Z"
+  }
+}
+```
+
+Error Responses:
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — no vault exists yet for this user
+
+---
+
+**POST /api/v1/vault**
+
+Creates the initial vault for a user who does not yet have one. Typically called once, shortly after registration, when the client generates the first empty (or initial) encrypted vault.
+
+Auth Required: Yes (Authorization: Bearer <accessToken>)
+Request Body:
+```json
+{
+  "encryptedVault": "<opaque encrypted blob>",
+  "vaultVersion": 1
+}
+```
+
+Success Response (201):
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "encryptedVault": "<opaque encrypted blob>",
+    "vaultVersion": 1,
+    "lastModified": "2026-07-24T15:00:00.000Z",
+    "createdAt": "2026-07-24T15:00:00.000Z",
+    "updatedAt": "2026-07-24T15:00:00.000Z"
+  }
+}
+```
+
+Error Responses:
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 409 CONFLICT — a vault already exists for this user (use PUT to update instead)
+- 422 VALIDATION_ERROR — missing/malformed encryptedVault or vaultVersion
+
+---
+
+**DELETE /api/v1/vault**
+
+Permanently deletes the user's vault. This is irreversible — per the zero-knowledge architecture, there is no server-side backup or recovery of vault contents.
+
+Auth Required: Yes (Authorization: Bearer <accessToken>)
+Request Body: None
+
+Success Response (200):
+```json
+{
+  "success": true,
+  "data": { "message": "Vault deleted successfully." }
+}
+```
+
+Error Responses:
+- 401 UNAUTHORIZED — missing, invalid, or expired access token
+- 404 NOT_FOUND — no vault exists for this user
+
+---
+
+# Synchronization Rules
 
 
 

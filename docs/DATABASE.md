@@ -822,23 +822,14 @@ The vault table maintains synchronization metadata including:
 
 
 
-\# Conflict Resolution
+\# Synchronization Strategy: Optimistic Concurrency Control
 
+Vault updates include a vaultVersion number. When a client submits an update, the server checks that the submitted vaultVersion is strictly greater than the currently stored version.
 
+- If the submitted version is newer: the update is accepted, and vaultVersion is incremented/stored as submitted.
+- If the submitted version is equal to or older than the currently stored version: the update is REJECTED with a 409 Conflict response. The client must fetch the latest vault (GET /api/v1/vault) and resolve the conflict — either by retrying with a freshly merged version, or prompting the user — before attempting to sync again.
 
-If multiple devices upload different versions simultaneously:
-
-
-
-\- The vault with the newest version is accepted.
-
-\- If versions are equal, the most recent timestamp wins.
-
-\- Older encrypted vault versions are discarded.
-
-
-
-This behavior follows the \*\*Last Change Wins\*\* strategy adopted for Version 1.0.
+This prevents silent data loss when multiple devices attempt to sync near-simultaneously, which is a critical property for a password vault where losing an edit silently is unacceptable.
 
 
 
