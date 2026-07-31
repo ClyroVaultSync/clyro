@@ -9,10 +9,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "libsodium-wrappers": "^0.7.13"
+    "libsodium-wrappers": "^0.7.13",
+    "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.13",
-    "typescript": "^5.0.0"
+    "@types/libsodium-wrappers-sumo": "^0.8.2",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.10"
   }
 }
