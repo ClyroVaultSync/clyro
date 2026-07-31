@@ -2,7 +2,9 @@
   "extends": "../../packages/config/tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "types": ["vite/client", "chrome"]
   },
   "include": [
     "src",

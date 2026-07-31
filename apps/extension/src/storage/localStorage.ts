@@ -8,7 +8,7 @@ export async function setAccessToken(token: string): Promise<void> {
 
 export async function getAccessToken(): Promise<string | null> {
   const result = await chrome.storage.local.get('accessToken');
-  return result.accessToken || null;
+  return (result.accessToken as string) || null;
 }
 
 export async function setRefreshToken(token: string): Promise<void> {
@@ -17,7 +17,7 @@ export async function setRefreshToken(token: string): Promise<void> {
 
 export async function getRefreshToken(): Promise<string | null> {
   const result = await chrome.storage.local.get('refreshToken');
-  return result.refreshToken || null;
+  return (result.refreshToken as string) || null;
 }
 
 export async function clearAuthTokens(): Promise<void> {
@@ -27,7 +27,7 @@ export async function clearAuthTokens(): Promise<void> {
 export async function getOrCreateDeviceIdentifier(): Promise<string> {
   const result = await chrome.storage.local.get('deviceIdentifier');
   if (result.deviceIdentifier) {
-    return result.deviceIdentifier;
+    return result.deviceIdentifier as string;
   }
   const newIdentifier = crypto.randomUUID();
   await chrome.storage.local.set({ deviceIdentifier: newIdentifier });
@@ -46,7 +46,7 @@ export async function setCachedVaultBlob(encryptedVault: string, vaultVersion: n
 
 export async function getCachedVaultBlob(): Promise<{ encryptedVault: string; vaultVersion: number; vaultSalt: string } | null> {
   const result = await chrome.storage.local.get('cachedVault');
-  return result.cachedVault || null;
+  return (result.cachedVault as { encryptedVault: string; vaultVersion: number; vaultSalt: string }) || null;
 }
 
 export async function clearCachedVaultBlob(): Promise<void> {
