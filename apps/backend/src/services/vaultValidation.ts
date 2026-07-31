@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createVaultSchema = z.object({
   encryptedVault: z.string().min(1),
+  vaultSalt: z.string().min(1),
   vaultVersion: z.number().int().positive(),
 });
 

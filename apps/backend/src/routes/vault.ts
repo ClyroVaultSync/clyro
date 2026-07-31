@@ -5,13 +5,14 @@ import { prisma } from '../db';
 import { successResponse, errorResponse } from '../utils/response';
 
 function serializeVault(vault: {
-  id: string; userId: string; encryptedVault: string; vaultVersion: number;
+  id: string; userId: string; encryptedVault: string; vaultSalt: string; vaultVersion: number;
   lastModified: Date; createdAt: Date; updatedAt: Date;
 }) {
   return {
     id: vault.id,
     userId: vault.userId,
     encryptedVault: vault.encryptedVault,
+    vaultSalt: vault.vaultSalt,
     vaultVersion: vault.vaultVersion,
     lastModified: vault.lastModified.toISOString(),
     createdAt: vault.createdAt.toISOString(),
@@ -75,6 +76,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
         data: {
           userId,
           encryptedVault: parsed.encryptedVault,
+          vaultSalt: parsed.vaultSalt,
           vaultVersion: parsed.vaultVersion,
         },
       });
