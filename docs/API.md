@@ -616,6 +616,7 @@ Success Response (200):
     "userId": "uuid",
     "encryptedVault": "<opaque encrypted blob>",
     "vaultVersion": 15,
+    "vaultSalt": "<base64 or hex-encoded salt>",
     "lastModified": "2026-07-18T14:00:00.000Z",
     "createdAt": "2026-01-01T00:00:00.000Z",
     "updatedAt": "2026-07-18T14:00:00.000Z"
@@ -712,8 +713,11 @@ Request Body:
 ```json
 {
   "encryptedVault": "<opaque encrypted blob>",
-  "vaultVersion": 1
+  "vaultVersion": 1,
+  "vaultSalt": "<base64 or hex-encoded salt>"
 }
+
+Note: `vaultSalt` must be provided once, at vault creation, and is immutable afterward — it is never updated by `PUT /api/v1/vault`.
 ```
 
 Success Response (201):
@@ -725,6 +729,7 @@ Success Response (201):
     "userId": "uuid",
     "encryptedVault": "<opaque encrypted blob>",
     "vaultVersion": 1,
+    "vaultSalt": "<base64 or hex-encoded salt>",
     "lastModified": "2026-07-24T15:00:00.000Z",
     "createdAt": "2026-07-24T15:00:00.000Z",
     "updatedAt": "2026-07-24T15:00:00.000Z"

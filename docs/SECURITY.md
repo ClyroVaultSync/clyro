@@ -738,6 +738,8 @@ The lifecycle is:
 
 5\. Key is securely discarded when the vault is locked or the session ends.
 
+The salt used in this derivation is generated once, client-side, at vault creation, and persisted server-side alongside the encrypted vault (see `docs/DATABASE.md`). This is safe under the zero-knowledge model: a salt has no value to an attacker without the corresponding master password, and the backend never uses it for any cryptographic operation of its own — it is stored purely so the client can re-derive the identical key on any device.
+
 
 
 Encryption keys are never:
