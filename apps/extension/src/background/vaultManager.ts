@@ -104,6 +104,22 @@ export async function isVaultUnlocked(): Promise<boolean> {
   return key !== null;
 }
 
+/**
+ * Whether this user has ever created a vault — distinguishes "needs to create
+ * one" from "needs to unlock an existing one" for an authenticated user.
+ * Uses /vault/metadata (no blob transfer) rather than GET /vault. Falls back to
+ * the offline cache if the network call fails, so an offline user who has
+ * unlocked before isn't wrongly routed back to vault creation.
+ */
+export async function vaultExists(): Promise<boolean> {
+  const response = await apiGet('/vault/metadata', true);
+  if (response.success) return true;
+  if (response.error?.code === 'NOT_FOUND') return false;
+
+  const cached = await getCachedVaultBlob();
+  return cached !== null;
+}
+
 export async function getVaultItems(): Promise<{ success: boolean; data?: VaultItem[]; error?: string }> {
   const key = await getVaultKey();
   if (!key) return { success: false, error: 'Vault is locked.' };

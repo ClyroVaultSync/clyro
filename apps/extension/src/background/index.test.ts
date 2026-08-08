@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
-import { createVault, unlockVault, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
 import { logout } from '../services/authService';
 import { getDevices, revokeDevice } from '../services/deviceService';
 import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
@@ -13,6 +13,7 @@ vi.mock('./vaultManager', () => ({
   unlockVault: vi.fn(),
   lockVault: vi.fn(),
   isVaultUnlocked: vi.fn(),
+  vaultExists: vi.fn(),
   getVaultItems: vi.fn(),
   saveVaultItems: vi.fn(),
 }));
@@ -96,6 +97,14 @@ describe('Background message routing', () => {
     const response = await handleMessage({ type: 'CREATE_VAULT', masterPassword: 'test' });
 
     expect(response).toEqual({ success: false, error: { code: 'CREATE_VAULT_FAILED', message: 'A vault already exists for this account.' } });
+  });
+
+  it('GET_VAULT_EXISTS reflects vaultExists()', async () => {
+    (vaultExists as Mock).mockResolvedValue(true);
+
+    const response = await handleMessage({ type: 'GET_VAULT_EXISTS' });
+
+    expect(response).toEqual({ success: true, data: { exists: true } });
   });
 
   it('GET_VAULT_ITEMS routes correctly on success', async () => {

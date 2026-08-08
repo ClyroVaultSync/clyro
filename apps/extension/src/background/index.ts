@@ -1,5 +1,5 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-import { createVault, unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
 import { login, register, logout, isAuthenticated } from '../services/authService';
 import { getDevices, revokeDevice } from '../services/deviceService';
 import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
@@ -57,6 +57,10 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
       case 'GET_VAULT_LOCK_STATUS': {
         const unlocked = await isVaultUnlocked();
         return { success: true, data: { unlocked } };
+      }
+      case 'GET_VAULT_EXISTS': {
+        const exists = await vaultExists();
+        return { success: true, data: { exists } };
       }
       case 'GET_VAULT_ITEMS': {
         const result = await getVaultItems();

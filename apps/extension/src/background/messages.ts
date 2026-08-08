@@ -7,6 +7,7 @@ export type BackgroundMessage =
   | { type: 'LOGOUT' }
   | { type: 'GET_AUTH_STATUS' }
   | { type: 'GET_VAULT_LOCK_STATUS' }
+  | { type: 'GET_VAULT_EXISTS' }
   | { type: 'GET_VAULT_ITEMS' }
   | { type: 'SAVE_VAULT_ITEMS'; items: import('@clyro/shared-types').VaultItem[] }
   | { type: 'GET_DEVICES' }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { createVault, unlockVault, lockVault, isVaultUnlocked } from './vaultManager';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists } from './vaultManager';
 import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro/crypto';
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
@@ -143,5 +143,28 @@ describe('vaultManager', () => {
 
     expect(setVaultKey).not.toHaveBeenCalled();
     expect(result).toEqual({ success: false, error: 'A vault already exists for this account.' });
+  });
+
+  it('vaultExists() returns true when /vault/metadata succeeds', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: true, data: { vaultVersion: 1 } });
+
+    expect(await vaultExists()).toBe(true);
+    expect(apiGet).toHaveBeenCalledWith('/vault/metadata', true);
+  });
+
+  it('vaultExists() returns false on a clean NOT_FOUND', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NOT_FOUND', message: 'No vault exists for this user.' } });
+
+    expect(await vaultExists()).toBe(false);
+  });
+
+  it('vaultExists() falls back to the offline cache on a non-404 failure', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR', message: 'offline' } });
+    (getCachedVaultBlob as Mock).mockResolvedValue({ encryptedVault: 'x', vaultSalt: 'y', vaultVersion: 1 });
+
+    expect(await vaultExists()).toBe(true);
+
+    (getCachedVaultBlob as Mock).mockResolvedValue(null);
+    expect(await vaultExists()).toBe(false);
   });
 });
