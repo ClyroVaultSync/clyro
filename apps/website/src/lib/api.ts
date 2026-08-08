@@ -12,13 +12,13 @@ export interface DevicePayload {
   browser: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
 }
 
@@ -122,7 +122,7 @@ export function getDeviceDetails(): DevicePayload {
   };
 }
 
-async function request<T = any>(
+async function request<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
@@ -145,12 +145,12 @@ async function request<T = any>(
     const res = await fetch(`${API_BASE_URL}${endpoint}`, config);
     const data = await res.json();
     return data;
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       success: false,
       error: {
         code: 'NETWORK_ERROR',
-        message: err.message || 'Network error occurred. Please try again.'
+        message: err instanceof Error ? err.message : 'Network error occurred. Please try again.'
       }
     };
   }

@@ -45,7 +45,7 @@ export default function VaultPage() {
     if (isAuthenticated) {
       fetchVaultInfo();
     }
-  }, [isAuthenticated, authLoading, router, fetchInfo = fetchVaultInfo]);
+  }, [isAuthenticated, authLoading, router, fetchVaultInfo]);
 
   const handleCreateVault = async () => {
     setActionLoading(true);

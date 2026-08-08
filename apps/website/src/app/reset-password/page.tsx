@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '../../lib/api';
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenParam = searchParams.get('token') || '';
@@ -134,5 +134,13 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '40px' }}><span className="spinner" style={{ width: '24px', height: '24px' }}></span></div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
