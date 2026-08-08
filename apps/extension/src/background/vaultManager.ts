@@ -1,7 +1,42 @@
-import { deriveVaultKey, decryptVault } from '@clyro/crypto';
+import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro/crypto';
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
-import { apiGet } from '../services/apiClient';
+import { apiGet, apiPost, apiPut } from '../services/apiClient';
+import type { VaultItem, VaultData } from '@clyro/shared-types';
+
+/**
+ * Creates a brand-new, empty vault for the current user: generates the
+ * (non-secret) vaultSalt, derives the key from the chosen master password,
+ * encrypts an empty item list, and POSTs it. Required once per account before
+ * unlockVault()/getVaultItems()/saveVaultItems() have anything to work with —
+ * GET /vault and PUT /vault both 404 until this has run (see docs/API.md).
+ * A CONFLICT (409) means a vault already exists for this user; the caller
+ * should route to unlockVault() instead of retrying creation.
+ */
+export async function createVault(masterPassword: string): Promise<{ success: boolean; error?: string }> {
+  const vaultSalt = await generateSalt();
+  const key = await deriveVaultKey(masterPassword, vaultSalt);
+  const vaultData: VaultData = { items: [] };
+  const encryptedVault = await encryptVault(key, JSON.stringify(vaultData));
+  const vaultVersion = 1;
+
+  const response = await apiPost<{ encryptedVault: string; vaultSalt: string; vaultVersion: number }>(
+    '/vault',
+    { encryptedVault, vaultSalt, vaultVersion },
+    true
+  );
+
+  if (!response.success || !response.data) {
+    if (response.error?.code === 'CONFLICT') {
+      return { success: false, error: 'A vault already exists for this account.' };
+    }
+    return { success: false, error: response.error?.message || 'Failed to create vault.' };
+  }
+
+  await setCachedVaultBlob(response.data.encryptedVault, response.data.vaultVersion, response.data.vaultSalt);
+  await setVaultKey(key);
+  return { success: true };
+}
 
 /**
  * Attempts to unlock the vault with the given master password.
@@ -67,4 +102,85 @@ export async function lockVault(): Promise<void> {
 export async function isVaultUnlocked(): Promise<boolean> {
   const key = await getVaultKey();
   return key !== null;
+}
+
+/**
+ * Whether this user has ever created a vault — distinguishes "needs to create
+ * one" from "needs to unlock an existing one" for an authenticated user.
+ * Uses /vault/metadata (no blob transfer) rather than GET /vault. Falls back to
+ * the offline cache if the network call fails, so an offline user who has
+ * unlocked before isn't wrongly routed back to vault creation.
+ */
+export async function vaultExists(): Promise<boolean> {
+  const response = await apiGet('/vault/metadata', true);
+  if (response.success) return true;
+  if (response.error?.code === 'NOT_FOUND') return false;
+
+  const cached = await getCachedVaultBlob();
+  return cached !== null;
+}
+
+export async function getVaultItems(): Promise<{ success: boolean; data?: VaultItem[]; error?: string }> {
+  const key = await getVaultKey();
+  if (!key) return { success: false, error: 'Vault is locked.' };
+
+  let encryptedVault: string | null = null;
+
+  const response = await apiGet<{ encryptedVault: string }>('/vault', true);
+  if (response.success && response.data) {
+    encryptedVault = response.data.encryptedVault;
+  } else {
+    const cached = await getCachedVaultBlob();
+    if (cached) encryptedVault = cached.encryptedVault;
+  }
+
+  if (!encryptedVault) return { success: true, data: [] };
+
+  try {
+    const decrypted = await decryptVault(key, encryptedVault);
+    const vaultData = JSON.parse(decrypted) as VaultData;
+    return { success: true, data: vaultData.items || [] };
+  } catch {
+    return { success: false, error: 'Failed to decrypt vault contents.' };
+  }
+}
+
+export async function saveVaultItems(items: VaultItem[]): Promise<{ success: boolean; error?: string }> {
+  const key = await getVaultKey();
+  if (!key) return { success: false, error: 'Vault is locked.' };
+
+  let vaultVersion = 0;
+  const cached = await getCachedVaultBlob();
+  if (cached) {
+    vaultVersion = cached.vaultVersion;
+  } else {
+    const metaRes = await apiGet<{ vaultVersion: number }>('/vault/metadata', true);
+    if (metaRes.success && metaRes.data) {
+      vaultVersion = metaRes.data.vaultVersion;
+    }
+  }
+
+  try {
+    const vaultData: VaultData = { items };
+    const serialized = JSON.stringify(vaultData);
+    const encryptedVault = await encryptVault(key, serialized);
+
+    const newVaultVersion = vaultVersion + 1;
+
+    const putRes = await apiPut('/vault', { encryptedVault, vaultVersion: newVaultVersion }, true);
+    if (putRes.success) {
+      const newResponse = await apiGet<{ encryptedVault: string; vaultSalt: string; vaultVersion: number }>('/vault', true);
+      if (newResponse.success && newResponse.data) {
+        await setCachedVaultBlob(newResponse.data.encryptedVault, newResponse.data.vaultVersion, newResponse.data.vaultSalt);
+      }
+      return { success: true };
+    } else {
+      if (putRes.error?.code === 'CONFLICT') {
+        return { success: false, error: 'Sync conflict: Vault was modified on another device. Please refresh.' };
+      }
+      return { success: false, error: putRes.error?.message || 'Failed to save vault.' };
+    }
+  } catch {
+    return { success: false, error: 'Encryption failed.' };
+  }
 }

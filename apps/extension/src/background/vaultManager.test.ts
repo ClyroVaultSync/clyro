@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { unlockVault, lockVault, isVaultUnlocked } from './vaultManager';
-import { deriveVaultKey, decryptVault } from '@clyro/crypto';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists } from './vaultManager';
+import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro/crypto';
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
-import { apiGet } from '../services/apiClient';
+import { apiGet, apiPost } from '../services/apiClient';
 
 vi.mock('@clyro/crypto', () => ({
   deriveVaultKey: vi.fn(),
   decryptVault: vi.fn(),
+  encryptVault: vi.fn(),
+  generateSalt: vi.fn(),
 }));
 
 vi.mock('../storage/sessionStorage', () => ({
@@ -23,6 +25,7 @@ vi.mock('../storage/localStorage', () => ({
 
 vi.mock('../services/apiClient', () => ({
   apiGet: vi.fn(),
+  apiPost: vi.fn(),
 }));
 
 describe('vaultManager', () => {
@@ -102,5 +105,66 @@ describe('vaultManager', () => {
 
     (getVaultKey as Mock).mockResolvedValue(null);
     expect(await isVaultUnlocked()).toBe(false);
+  });
+
+  it('createVault() generates a salt, encrypts an empty vault, and stores the key on success', async () => {
+    (generateSalt as Mock).mockResolvedValue('new-salt');
+    (deriveVaultKey as Mock).mockResolvedValue('derived-key');
+    (encryptVault as Mock).mockResolvedValue('encrypted-empty-vault');
+    (apiPost as Mock).mockResolvedValue({
+      success: true,
+      data: { encryptedVault: 'encrypted-empty-vault', vaultSalt: 'new-salt', vaultVersion: 1 },
+    });
+
+    const result = await createVault('new-master-password');
+
+    expect(generateSalt).toHaveBeenCalled();
+    expect(deriveVaultKey).toHaveBeenCalledWith('new-master-password', 'new-salt');
+    expect(apiPost).toHaveBeenCalledWith(
+      '/vault',
+      { encryptedVault: 'encrypted-empty-vault', vaultSalt: 'new-salt', vaultVersion: 1 },
+      true
+    );
+    expect(setCachedVaultBlob).toHaveBeenCalledWith('encrypted-empty-vault', 1, 'new-salt');
+    expect(setVaultKey).toHaveBeenCalledWith('derived-key');
+    expect(result).toEqual({ success: true });
+  });
+
+  it('createVault() surfaces a clear error when a vault already exists', async () => {
+    (generateSalt as Mock).mockResolvedValue('new-salt');
+    (deriveVaultKey as Mock).mockResolvedValue('derived-key');
+    (encryptVault as Mock).mockResolvedValue('encrypted-empty-vault');
+    (apiPost as Mock).mockResolvedValue({
+      success: false,
+      error: { code: 'CONFLICT', message: 'A vault already exists for this user. Use PUT to update instead.' },
+    });
+
+    const result = await createVault('new-master-password');
+
+    expect(setVaultKey).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: 'A vault already exists for this account.' });
+  });
+
+  it('vaultExists() returns true when /vault/metadata succeeds', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: true, data: { vaultVersion: 1 } });
+
+    expect(await vaultExists()).toBe(true);
+    expect(apiGet).toHaveBeenCalledWith('/vault/metadata', true);
+  });
+
+  it('vaultExists() returns false on a clean NOT_FOUND', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NOT_FOUND', message: 'No vault exists for this user.' } });
+
+    expect(await vaultExists()).toBe(false);
+  });
+
+  it('vaultExists() falls back to the offline cache on a non-404 failure', async () => {
+    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR', message: 'offline' } });
+    (getCachedVaultBlob as Mock).mockResolvedValue({ encryptedVault: 'x', vaultSalt: 'y', vaultVersion: 1 });
+
+    expect(await vaultExists()).toBe(true);
+
+    (getCachedVaultBlob as Mock).mockResolvedValue(null);
+    expect(await vaultExists()).toBe(false);
   });
 });
