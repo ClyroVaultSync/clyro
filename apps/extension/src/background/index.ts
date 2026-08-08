@@ -1,10 +1,5 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-// NOTE: getVaultItems/saveVaultItems are added to vaultManager.ts on the
-// implementation/phase-2-popup branch (not yet on this branch/main). This file
-// will not compile in isolation until the two branches are combined — see
-// the plan's "Branch strategy" note. Do not reimplement vault decrypt/encrypt
-// logic here; consume vaultManager's functions once merged.
-import { unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
 import { login, register, logout, isAuthenticated } from '../services/authService';
 import { getDevices, revokeDevice } from '../services/deviceService';
 import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
@@ -24,6 +19,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
 export async function handleMessage(message: BackgroundMessage): Promise<BackgroundResponse> {
   try {
     switch (message.type) {
+      case 'CREATE_VAULT': {
+        const result = await createVault(message.masterPassword);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'CREATE_VAULT_FAILED', message: result.error || 'Failed to create vault.' } };
+      }
       case 'UNLOCK_VAULT': {
         const result = await unlockVault(message.masterPassword);
         if (result.success) return { success: true };
@@ -57,6 +57,16 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
       case 'GET_VAULT_LOCK_STATUS': {
         const unlocked = await isVaultUnlocked();
         return { success: true, data: { unlocked } };
+      }
+      case 'GET_VAULT_ITEMS': {
+        const result = await getVaultItems();
+        if (result.success) return { success: true, data: result.data };
+        return { success: false, error: { code: 'GET_ITEMS_FAILED', message: result.error || 'Failed to get vault items.' } };
+      }
+      case 'SAVE_VAULT_ITEMS': {
+        const result = await saveVaultItems(message.items);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'SAVE_ITEMS_FAILED', message: result.error || 'Failed to save vault items.' } };
       }
       case 'GET_DEVICES': {
         const result = await getDevices();

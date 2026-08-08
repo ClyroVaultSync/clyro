@@ -16,5 +16,8 @@
       "js": ["src/content-scripts/index.ts", "src/content-scripts/autofillUI.tsx"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "action": {
+    "default_popup": "index.html"
+  }
 }
