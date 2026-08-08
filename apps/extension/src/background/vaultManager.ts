@@ -1,8 +1,42 @@
-import { deriveVaultKey, decryptVault, encryptVault } from '@clyro/crypto';
+import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro/crypto';
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
-import { apiGet, apiPut } from '../services/apiClient';
+import { apiGet, apiPost, apiPut } from '../services/apiClient';
 import type { VaultItem, VaultData } from '@clyro/shared-types';
+
+/**
+ * Creates a brand-new, empty vault for the current user: generates the
+ * (non-secret) vaultSalt, derives the key from the chosen master password,
+ * encrypts an empty item list, and POSTs it. Required once per account before
+ * unlockVault()/getVaultItems()/saveVaultItems() have anything to work with —
+ * GET /vault and PUT /vault both 404 until this has run (see docs/API.md).
+ * A CONFLICT (409) means a vault already exists for this user; the caller
+ * should route to unlockVault() instead of retrying creation.
+ */
+export async function createVault(masterPassword: string): Promise<{ success: boolean; error?: string }> {
+  const vaultSalt = await generateSalt();
+  const key = await deriveVaultKey(masterPassword, vaultSalt);
+  const vaultData: VaultData = { items: [] };
+  const encryptedVault = await encryptVault(key, JSON.stringify(vaultData));
+  const vaultVersion = 1;
+
+  const response = await apiPost<{ encryptedVault: string; vaultSalt: string; vaultVersion: number }>(
+    '/vault',
+    { encryptedVault, vaultSalt, vaultVersion },
+    true
+  );
+
+  if (!response.success || !response.data) {
+    if (response.error?.code === 'CONFLICT') {
+      return { success: false, error: 'A vault already exists for this account.' };
+    }
+    return { success: false, error: response.error?.message || 'Failed to create vault.' };
+  }
+
+  await setCachedVaultBlob(response.data.encryptedVault, response.data.vaultVersion, response.data.vaultSalt);
+  await setVaultKey(key);
+  return { success: true };
+}
 
 /**
  * Attempts to unlock the vault with the given master password.

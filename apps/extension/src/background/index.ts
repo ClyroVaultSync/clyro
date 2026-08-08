@@ -1,5 +1,5 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-import { unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
 import { login, register, logout, isAuthenticated } from '../services/authService';
 import { clearVaultKey } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
@@ -16,6 +16,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
 export async function handleMessage(message: BackgroundMessage): Promise<BackgroundResponse> {
   try {
     switch (message.type) {
+      case 'CREATE_VAULT': {
+        const result = await createVault(message.masterPassword);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'CREATE_VAULT_FAILED', message: result.error || 'Failed to create vault.' } };
+      }
       case 'UNLOCK_VAULT': {
         const result = await unlockVault(message.masterPassword);
         if (result.success) return { success: true };

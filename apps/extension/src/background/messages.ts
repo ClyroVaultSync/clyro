@@ -1,4 +1,5 @@
 export type BackgroundMessage =
+  | { type: 'CREATE_VAULT'; masterPassword: string }
   | { type: 'UNLOCK_VAULT'; masterPassword: string }
   | { type: 'LOCK_VAULT' }
   | { type: 'LOGIN'; email: string; password: string }
