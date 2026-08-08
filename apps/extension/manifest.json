@@ -8,5 +8,13 @@
   "background": {
     "service_worker": "src/background/index.ts",
     "type": "module"
-  }
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content-scripts/index.ts", "src/content-scripts/autofillUI.tsx"],
+      "run_at": "document_idle"
+    }
+  ]
 }
