@@ -1,5 +1,5 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-import { unlockVault, lockVault, isVaultUnlocked } from './vaultManager';
+import { unlockVault, lockVault, isVaultUnlocked, getVaultItems, saveVaultItems } from './vaultManager';
 import { login, register, logout, isAuthenticated } from '../services/authService';
 import { clearVaultKey } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
@@ -49,6 +49,16 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
       case 'GET_VAULT_LOCK_STATUS': {
         const unlocked = await isVaultUnlocked();
         return { success: true, data: { unlocked } };
+      }
+      case 'GET_VAULT_ITEMS': {
+        const result = await getVaultItems();
+        if (result.success) return { success: true, data: result.data };
+        return { success: false, error: { code: 'GET_ITEMS_FAILED', message: result.error || 'Failed to get vault items.' } };
+      }
+      case 'SAVE_VAULT_ITEMS': {
+        const result = await saveVaultItems(message.items);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'SAVE_ITEMS_FAILED', message: result.error || 'Failed to save vault items.' } };
       }
       default:
         return { success: false, error: { code: 'UNKNOWN_MESSAGE', message: 'Unrecognized message type.' } };

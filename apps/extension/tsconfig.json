@@ -4,6 +4,7 @@
     "outDir": "dist",
     "moduleResolution": "bundler",
     "module": "ESNext",
+    "jsx": "react-jsx",
     "types": ["vite/client", "chrome"]
   },
   "include": [

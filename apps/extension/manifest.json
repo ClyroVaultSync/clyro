@@ -8,5 +8,8 @@
   "background": {
     "service_worker": "src/background/index.ts",
     "type": "module"
+  },
+  "action": {
+    "default_popup": "index.html"
   }
 }
