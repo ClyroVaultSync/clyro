@@ -286,6 +286,10 @@ The backend stores the encrypted vault but cannot decrypt it.
 
 | updated\_at | TIMESTAMP | Last synchronization |
 
+| vault\_salt | TEXT | Cryptographic salt used for Argon2id key derivation. Not secret — required for the client to re-derive the same vault encryption key on any device. Never used server-side. |
+
+`vault_salt` is generated once, client-side, when the vault is first created. It is stored here purely so multiple devices can derive the identical vault encryption key from the user's master password. The backend never uses this salt for anything — it only stores and returns it.
+
 
 
 \---

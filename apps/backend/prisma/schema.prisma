@@ -107,6 +107,7 @@ model Vault {
   id             String   @id @default(uuid())
   userId         String   @unique @map("user_id")
   encryptedVault String   @map("encrypted_vault")
+  vaultSalt      String   @map("vault_salt")
   vaultVersion   Int      @default(1) @map("vault_version")
   lastModified   DateTime @default(now()) @map("last_modified")
   createdAt      DateTime @default(now()) @map("created_at")

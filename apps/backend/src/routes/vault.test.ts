@@ -34,6 +34,7 @@ describe('Vault Routes', () => {
     id: 'vault-1',
     userId: 'user-1',
     encryptedVault: 'encrypted-data',
+    vaultSalt: 'test-salt',
     vaultVersion: 15,
     lastModified: new Date('2026-07-24T15:00:00.000Z'),
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -127,6 +128,7 @@ describe('Vault Routes', () => {
         headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'encrypted-data',
+          vaultSalt: 'test-salt',
           vaultVersion: 1,
         },
       });
@@ -137,9 +139,26 @@ describe('Vault Routes', () => {
         data: {
           userId: 'user-1',
           encryptedVault: 'encrypted-data',
+          vaultSalt: 'test-salt',
           vaultVersion: 1,
         },
       });
+    });
+
+    it('should return 422 if vaultSalt is missing', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/vault',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          encryptedVault: 'encrypted-data',
+          vaultVersion: 1,
+          // Missing vaultSalt
+        },
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
 
     it('should return 409 if vault already exists', async () => {
@@ -151,6 +170,7 @@ describe('Vault Routes', () => {
         headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'encrypted-data',
+          vaultSalt: 'test-salt',
           vaultVersion: 1,
         },
       });
