@@ -4,6 +4,13 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '../../lib/api';
+import { Card } from '../../components/ui/Card';
+import { FormField } from '../../components/ui/FormField';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Alert } from '../../components/ui/Alert';
+import { PageTransition } from '../../components/motion/PageTransition';
+import { Spinner } from '../../components/ui/Spinner';
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -53,93 +60,96 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="glass-card auth-card">
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <h2 className="page-title" style={{ fontSize: '1.6rem' }}>Reset Password</h2>
-          <p className="page-subtitle">Recover your Clyro account authentication access</p>
-        </div>
-
-        {error && (
-          <div className="alert alert-danger">
-            <span>⚠️</span>
-            <div>{error}</div>
+    <PageTransition>
+      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8">
+          <div className="mb-8 text-center">
+            <h2 className="text-2xl font-bold text-heading">Reset Password</h2>
+            <p className="mt-2 text-sm text-body">Recover your Clyro account authentication access</p>
           </div>
-        )}
 
-        {success && (
-          <div className="alert alert-success">
-            <span>✅</span>
-            <div>{success}</div>
+          <Alert
+            isVisible={!!error}
+            title="Error"
+            description={error || ''}
+            variant="danger"
+            className="mb-6"
+            onClose={() => setError(null)}
+          />
+
+          <Alert
+            isVisible={!!success}
+            title="Success"
+            description={success || ''}
+            variant="success"
+            className="mb-6"
+          />
+
+          {tokenParam || token ? (
+            <form onSubmit={handleResetPassword} className="flex flex-col gap-5">
+              <FormField id="token" label="Reset Token">
+                <Input
+                  id="token"
+                  type="text"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  required
+                />
+              </FormField>
+
+              <FormField id="newPassword" label="New Master Password">
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+              </FormField>
+
+              <Button type="submit" variant="primary" className="mt-2 w-full" isLoading={loading}>
+                Set New Password
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleRequestLink} className="flex flex-col gap-5">
+              <FormField id="email" label="Account Email Address">
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </FormField>
+
+              <Button type="submit" variant="primary" className="mt-2 w-full" isLoading={loading}>
+                Send Reset Link
+              </Button>
+            </form>
+          )}
+
+          <div className="mt-8 text-center text-sm text-body">
+            Remembered your password?{' '}
+            <Link href="/login" className="font-semibold text-accent hover:underline">
+              Sign in
+            </Link>
           </div>
-        )}
-
-        {tokenParam || token ? (
-          <form onSubmit={handleResetPassword}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="token">Reset Token</label>
-              <input
-                id="token"
-                type="text"
-                className="form-input"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="newPassword">New Master Password</label>
-              <input
-                id="newPassword"
-                type="password"
-                className="form-input"
-                placeholder="At least 8 characters"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-              {loading ? <span className="spinner" /> : 'Set New Password'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleRequestLink}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="email">Account Email Address</label>
-              <input
-                id="email"
-                type="email"
-                className="form-input"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-              {loading ? <span className="spinner" /> : 'Send Reset Link'}
-            </button>
-          </form>
-        )}
-
-        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          Remembered your password?{' '}
-          <Link href="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>
-            Sign in
-          </Link>
-        </div>
+        </Card>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div style={{ textAlign: 'center', padding: '40px' }}><span className="spinner" style={{ width: '24px', height: '24px' }}></span></div>}>
+    <Suspense fallback={
+      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    }>
       <ResetPasswordContent />
     </Suspense>
   );

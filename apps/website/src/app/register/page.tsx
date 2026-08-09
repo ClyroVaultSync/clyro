@@ -4,6 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
+import { Card } from '../../components/ui/Card';
+import { FormField } from '../../components/ui/FormField';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Alert } from '../../components/ui/Alert';
+import { PageTransition } from '../../components/motion/PageTransition';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -55,96 +61,88 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="glass-card auth-card">
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <h2 className="page-title" style={{ fontSize: '1.6rem' }}>Create Your Vault Account</h2>
-          <p className="page-subtitle">Zero-knowledge end-to-end encrypted storage</p>
-        </div>
-
-        {error && (
-          <div className="alert alert-danger">
-            <span>⚠️</span>
-            <div>{error}</div>
-          </div>
-        )}
-
-        {successMessage && (
-          <div className="alert alert-success">
-            <span>✅</span>
-            <div>{successMessage}</div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">Email Address</label>
-            <input
-              id="email"
-              type="email"
-              className="form-input"
-              placeholder="user@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+    <PageTransition>
+      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8">
+          <div className="mb-8 text-center">
+            <h2 className="text-2xl font-bold text-heading">Create Your Vault Account</h2>
+            <p className="mt-2 text-sm text-body">Zero-knowledge end-to-end encrypted storage</p>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="phone">Phone Number (Optional)</label>
-            <input
-              id="phone"
-              type="tel"
-              className="form-input"
-              placeholder="+1234567890"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+          <Alert
+            isVisible={!!error}
+            title="Registration Error"
+            description={error || ''}
+            variant="danger"
+            className="mb-6"
+            onClose={() => setError(null)}
+          />
+
+          <Alert
+            isVisible={!!successMessage}
+            title="Success"
+            description={successMessage || ''}
+            variant="success"
+            className="mb-6"
+          />
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <FormField id="email" label="Email Address">
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </FormField>
+
+            <FormField id="phone" label="Phone Number (Optional)">
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+1234567890"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </FormField>
+
+            <FormField id="password" label="Master Password">
+              <Input
+                id="password"
+                type="password"
+                placeholder="At least 8 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </FormField>
+
+            <FormField id="confirmPassword" label="Confirm Master Password">
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Repeat master password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </FormField>
+
+            <Button type="submit" variant="primary" className="mt-2 w-full" isLoading={loading}>
+              Register Account
+            </Button>
+          </form>
+
+          <div className="mt-8 text-center text-sm text-body">
+            Already have an account?{' '}
+            <Link href="/login" className="font-semibold text-accent hover:underline">
+              Sign in
+            </Link>
           </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">Master Password</label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              placeholder="At least 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="confirmPassword">Confirm Master Password</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              className="form-input"
-              placeholder="Repeat master password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary btn-full"
-            disabled={loading}
-            style={{ marginTop: '12px' }}
-          >
-            {loading ? <span className="spinner" /> : 'Register Account'}
-          </button>
-        </form>
-
-        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          Already have an account?{' '}
-          <Link href="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>
-            Sign in
-          </Link>
-        </div>
+        </Card>
       </div>
-    </div>
+    </PageTransition>
   );
 }

@@ -4,6 +4,15 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, VaultMetadata, VaultData } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Card } from '../../components/ui/Card';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Alert } from '../../components/ui/Alert';
+import { Spinner } from '../../components/ui/Spinner';
+import { Modal } from '../../components/ui/Modal';
+import { PageTransition } from '../../components/motion/PageTransition';
+import { Icons } from '../../components/icons';
 
 export default function VaultPage() {
   const router = useRouter();
@@ -15,6 +24,7 @@ export default function VaultPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const fetchVaultInfo = useCallback(async () => {
     setLoading(true);
@@ -68,8 +78,7 @@ export default function VaultPage() {
   };
 
   const handleDeleteVault = async () => {
-    if (!confirm('CAUTION: Deleting your vault permanently removes all stored encrypted data. This cannot be undone. Continue?')) return;
-
+    setDeleteModalOpen(false);
     setActionLoading(true);
     setError(null);
     setMessage(null);
@@ -88,101 +97,139 @@ export default function VaultPage() {
 
   if (authLoading || loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 0' }}>
-        <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px' }} />
-        <p style={{ color: 'var(--text-muted)' }}>Loading encrypted vault metadata...</p>
+      <div className="flex min-h-[50vh] items-center justify-center flex-col gap-4">
+        <Spinner size="lg" />
+        <p className="text-body">Loading encrypted vault metadata...</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
-          <h1 className="page-title">Vault Management Shell</h1>
-          <p className="page-subtitle">
-            Zero-knowledge encrypted synchronization state and version control.
-          </p>
-        </div>
-        <button onClick={fetchVaultInfo} className="btn btn-secondary btn-sm">
-          Refresh Metadata
-        </button>
-      </div>
+    <PageTransition>
+      <div className="pb-12">
+        <PageHeader 
+          title="Vault Management Shell" 
+          subtitle="Zero-knowledge encrypted synchronization state and version control."
+        >
+          <Button variant="secondary" size="sm" onClick={fetchVaultInfo}>
+            <Icons.RefreshCw className="mr-2 h-4 w-4" /> Refresh Metadata
+          </Button>
+        </PageHeader>
 
-      {error && (
-        <div className="alert alert-danger">
-          <span>⚠️</span>
-          <div>{error}</div>
-        </div>
-      )}
+        <Alert
+          isVisible={!!error}
+          title="Error"
+          description={error || ''}
+          variant="danger"
+          className="mb-6"
+          onClose={() => setError(null)}
+        />
 
-      {message && (
-        <div className="alert alert-success">
-          <span>✅</span>
-          <div>{message}</div>
-        </div>
-      )}
+        <Alert
+          isVisible={!!message}
+          title="Success"
+          description={message || ''}
+          variant="success"
+          className="mb-6"
+          onClose={() => setMessage(null)}
+        />
 
-      <div className="alert alert-warning" style={{ background: 'rgba(99, 102, 241, 0.12)', borderColor: 'rgba(99, 102, 241, 0.3)', color: '#c7d2fe' }}>
-        <span>ℹ️</span>
-        <div>
-          <strong>Zero-Knowledge Decoupling Notice:</strong> Live client-side decryption of credentials in this web portal will be activated when Track C (&apos;packages/crypto&apos;) client libraries are linked. Currently showing server-side vault metadata & sync status.
-        </div>
-      </div>
+        <Alert
+          isVisible={true}
+          title="Zero-Knowledge Decoupling Notice"
+          description="Live client-side decryption of credentials in this web portal will be activated when Track C ('packages/crypto') client libraries are linked. Currently showing server-side vault metadata & sync status."
+          variant="warning"
+          className="mb-6"
+        />
 
-      {!vaultMetadata ? (
-        <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px', marginTop: '24px' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🔐</div>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>No Encrypted Vault Initialized</h3>
-          <p style={{ color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto 24px' }}>
-            You do not currently have an active encrypted vault on the server. Initialize an empty vault payload to enable synchronization.
-          </p>
-          <button onClick={handleCreateVault} className="btn btn-primary" disabled={actionLoading}>
-            {actionLoading ? <span className="spinner" /> : 'Initialize Encrypted Vault'}
-          </button>
-        </div>
-      ) : (
-        <div className="grid-cols-2" style={{ marginTop: '24px' }}>
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 600, marginBottom: '16px' }}>Vault Metadata</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Vault Version</span>
-                <span className="badge badge-success">v{vaultMetadata.vaultVersion}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Last Modified</span>
-                <span style={{ color: 'var(--text-main)' }}>
-                  {new Date(vaultMetadata.lastModified).toLocaleString()}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Payload State</span>
-                <span style={{ color: 'var(--success)' }}>Encrypted (Opaque Blob)</span>
-              </div>
-              {vaultData && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Blob Size</span>
-                  <span style={{ color: 'var(--text-main)' }}>{vaultData.encryptedVault.length} bytes</span>
+        {!vaultMetadata ? (
+          <Card className="flex flex-col items-center justify-center p-12 text-center mt-6">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <Icons.Lock className="h-8 w-8" />
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-heading">No Encrypted Vault Initialized</h3>
+            <p className="max-w-md text-sm text-body mb-6">
+              You do not currently have an active encrypted vault on the server. Initialize an empty vault payload to enable synchronization.
+            </p>
+            <Button variant="primary" onClick={handleCreateVault} isLoading={actionLoading}>
+              Initialize Encrypted Vault
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <Card>
+              <h3 className="text-lg font-semibold text-heading mb-4">Vault Metadata</h3>
+              <div className="flex flex-col gap-4 text-sm">
+                <div className="flex justify-between items-center border-b border-border pb-3">
+                  <span className="text-body flex items-center gap-2">
+                    <Icons.GitCommit className="h-4 w-4" /> Vault Version
+                  </span>
+                  <Badge variant="success">v{vaultMetadata.vaultVersion}</Badge>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="flex justify-between items-center border-b border-border pb-3">
+                  <span className="text-body flex items-center gap-2">
+                    <Icons.Clock className="h-4 w-4" /> Last Modified
+                  </span>
+                  <span className="font-medium text-heading">
+                    {new Date(vaultMetadata.lastModified).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-b border-border pb-3">
+                  <span className="text-body flex items-center gap-2">
+                    <Icons.Shield className="h-4 w-4" /> Payload State
+                  </span>
+                  <span className="font-medium text-success">Encrypted (Opaque Blob)</span>
+                </div>
+                {vaultData && (
+                  <div className="flex justify-between items-center pb-1">
+                    <span className="text-body flex items-center gap-2">
+                      <Icons.Database className="h-4 w-4" /> Blob Size
+                    </span>
+                    <span className="font-medium text-heading">{vaultData.encryptedVault.length} bytes</span>
+                  </div>
+                )}
+              </div>
+            </Card>
 
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 600, marginBottom: '12px' }}>Vault Operations</h3>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                Manage cloud vault storage. Note that deleting your vault permanently removes all stored data from the server.
-              </p>
-            </div>
+            <Card className="flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-heading mb-3">Vault Operations</h3>
+                <p className="text-sm text-body mb-6">
+                  Manage cloud vault storage. Note that deleting your vault permanently removes all stored data from the server.
+                </p>
+              </div>
 
-            <button onClick={handleDeleteVault} className="btn btn-danger btn-full" disabled={actionLoading}>
-              {actionLoading ? <span className="spinner" /> : 'Delete Encrypted Vault'}
-            </button>
+              <Button
+                variant="danger"
+                className="w-full justify-start mt-auto"
+                onClick={() => setDeleteModalOpen(true)}
+                disabled={actionLoading}
+                isLoading={actionLoading}
+              >
+                <Icons.Trash2 className="mr-2 h-4 w-4" /> Delete Encrypted Vault
+              </Button>
+            </Card>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        <Modal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          title="Delete Encrypted Vault"
+        >
+          <p className="text-sm text-body mb-6">
+            CAUTION: Deleting your vault permanently removes all stored encrypted data. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" size="sm" onClick={() => setDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDeleteVault} isLoading={actionLoading}>
+              Delete Permanently
+            </Button>
+          </div>
+        </Modal>
+      </div>
+    </PageTransition>
   );
 }

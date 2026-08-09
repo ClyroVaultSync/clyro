@@ -4,6 +4,17 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ActiveSession } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Card } from '../../components/ui/Card';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Alert } from '../../components/ui/Alert';
+import { Spinner } from '../../components/ui/Spinner';
+import { Modal } from '../../components/ui/Modal';
+import { PageTransition } from '../../components/motion/PageTransition';
+import { StaggerList } from '../../components/motion/StaggerList';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
+import { Icons } from '../../components/icons';
 
 export default function SessionsPage() {
   const router = useRouter();
@@ -15,6 +26,8 @@ export default function SessionsPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [revokeSessionId, setRevokeSessionId] = useState<string | null>(null);
+  const [logoutAllModalOpen, setLogoutAllModalOpen] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -41,8 +54,7 @@ export default function SessionsPage() {
   }, [isAuthenticated, authLoading, router, fetchSessions]);
 
   const handleRevokeSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to terminate this active session?')) return;
-
+    setRevokeSessionId(null);
     setRevokingId(sessionId);
     setActionMessage(null);
     setError(null);
@@ -59,8 +71,7 @@ export default function SessionsPage() {
   };
 
   const handleLogoutAll = async () => {
-    if (!confirm('This will terminate ALL active sessions across all your devices. Continue?')) return;
-
+    setLogoutAllModalOpen(false);
     setLoggingOutAll(true);
     await logoutAll();
     router.push('/login');
@@ -68,102 +79,155 @@ export default function SessionsPage() {
 
   if (authLoading || loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 0' }}>
-        <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px' }} />
-        <p style={{ color: 'var(--text-muted)' }}>Loading active sessions...</p>
+      <div className="flex min-h-[50vh] items-center justify-center flex-col gap-4">
+        <Spinner size="lg" />
+        <p className="text-body">Loading active sessions...</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
-          <h1 className="page-title">Active Sessions</h1>
-          <p className="page-subtitle">
-            Review and terminate authenticated sessions across your devices.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={fetchSessions} className="btn btn-secondary btn-sm">
-            Refresh
-          </button>
-          <button
-            onClick={handleLogoutAll}
-            className="btn btn-danger btn-sm"
+    <PageTransition>
+      <div className="pb-12">
+        <PageHeader 
+          title="Active Sessions" 
+          subtitle="Review and terminate authenticated sessions across your devices."
+        >
+          <Button variant="secondary" size="sm" onClick={fetchSessions}>
+            <Icons.RefreshCw className="mr-2 h-4 w-4" /> Refresh
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setLogoutAllModalOpen(true)}
             disabled={loggingOutAll}
+            isLoading={loggingOutAll}
           >
-            {loggingOutAll ? <span className="spinner" /> : 'Log Out All Devices'}
-          </button>
-        </div>
-      </div>
+            Log Out All Devices
+          </Button>
+        </PageHeader>
 
-      {error && (
-        <div className="alert alert-danger">
-          <span>⚠️</span>
-          <div>{error}</div>
-        </div>
-      )}
+        <Alert
+          isVisible={!!error}
+          title="Error"
+          description={error || ''}
+          variant="danger"
+          className="mb-6"
+          onClose={() => setError(null)}
+        />
 
-      {actionMessage && (
-        <div className="alert alert-success">
-          <span>✅</span>
-          <div>{actionMessage}</div>
-        </div>
-      )}
+        <Alert
+          isVisible={!!actionMessage}
+          title="Success"
+          description={actionMessage || ''}
+          variant="success"
+          className="mb-6"
+          onClose={() => setActionMessage(null)}
+        />
 
-      {sessions.length === 0 ? (
-        <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🛡️</div>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No Active Sessions Found</h3>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Sign in to start a new authenticated session.
-          </p>
-        </div>
-      ) : (
-        <div className="grid-cols-2">
-          {sessions.map((sess) => (
-            <div key={sess.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{sess.deviceName}</h3>
-                  <span className="badge badge-success">Active</span>
-                </div>
-
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px' }}>
-                  <div>
-                    <strong style={{ color: 'var(--text-main)' }}>Session ID:</strong>{' '}
-                    <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.775rem' }}>
-                      {sess.id}
-                    </code>
-                  </div>
-                  <div>
-                    <strong style={{ color: 'var(--text-main)' }}>Created:</strong>{' '}
-                    {new Date(sess.createdAt).toLocaleString()}
-                  </div>
-                  <div>
-                    <strong style={{ color: 'var(--text-main)' }}>Last Activity:</strong>{' '}
-                    {new Date(sess.lastActivityAt).toLocaleString()}
-                  </div>
-                  <div>
-                    <strong style={{ color: 'var(--text-main)' }}>Expires At:</strong>{' '}
-                    {new Date(sess.expiresAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleRevokeSession(sess.id)}
-                className="btn btn-danger btn-sm btn-full"
-                disabled={revokingId === sess.id}
-              >
-                {revokingId === sess.id ? <span className="spinner" /> : 'Terminate Session'}
-              </button>
+        {sessions.length === 0 ? (
+          <Card className="flex flex-col items-center justify-center p-12 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <Icons.Shield className="h-8 w-8" />
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+            <h3 className="mb-2 text-lg font-semibold text-heading">No Active Sessions Found</h3>
+            <p className="max-w-sm text-sm text-body">
+              Sign in to start a new authenticated session.
+            </p>
+          </Card>
+        ) : (
+          <StaggerList className="w-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Device / Session ID</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Last Activity</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sessions.map((sess) => (
+                  <TableRow key={sess.id} className="group">
+                    <TableCell>
+                      <div className="font-semibold text-heading">{sess.deviceName}</div>
+                      <code className="text-[10px] text-body bg-black/20 px-1 py-0.5 rounded uppercase font-mono tracking-wider">
+                        {sess.id.split('-')[0]}
+                      </code>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="success">Active</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(sess.createdAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(sess.lastActivityAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(sess.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setRevokeSessionId(sess.id)}
+                        disabled={revokingId === sess.id}
+                        isLoading={revokingId === sess.id}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                      >
+                        Terminate
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </StaggerList>
+        )}
+
+        <Modal
+          isOpen={!!revokeSessionId}
+          onClose={() => setRevokeSessionId(null)}
+          title="Terminate Session"
+        >
+          <p className="text-sm text-body mb-6">
+            Are you sure you want to terminate this active session? The device will be signed out immediately.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" size="sm" onClick={() => setRevokeSessionId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => revokeSessionId && handleRevokeSession(revokeSessionId)}
+            >
+              Terminate Session
+            </Button>
+          </div>
+        </Modal>
+
+        <Modal
+          isOpen={logoutAllModalOpen}
+          onClose={() => setLogoutAllModalOpen(false)}
+          title="Log Out All Devices"
+        >
+          <p className="text-sm text-body mb-6">
+            This will terminate ALL active sessions across all your devices, including this one. Continue?
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" size="sm" onClick={() => setLogoutAllModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleLogoutAll}>
+              Log Out All
+            </Button>
+          </div>
+        </Modal>
+      </div>
+    </PageTransition>
   );
 }
