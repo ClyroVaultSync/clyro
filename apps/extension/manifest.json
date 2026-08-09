@@ -5,6 +5,9 @@
   "permissions": [
     "storage"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "background": {
     "service_worker": "src/background/index.ts",
     "type": "module"
@@ -13,7 +16,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content-scripts/index.ts", "src/content-scripts/autofillUI.tsx"],
+      "js": ["src/content-scripts/detect.ts", "src/content-scripts/autofillUI.tsx"],
       "run_at": "document_idle"
     }
   ],

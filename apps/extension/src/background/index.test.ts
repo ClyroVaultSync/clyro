@@ -5,7 +5,7 @@ import { logout } from '../services/authService';
 import { getDevices, revokeDevice } from '../services/deviceService';
 import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
 import { clearVaultKey } from '../storage/sessionStorage';
-import { clearCachedVaultBlob } from '../storage/localStorage';
+import { clearCachedVaultBlob, clearAuthTokens } from '../storage/localStorage';
 import type { BackgroundMessage } from './messages';
 
 vi.mock('./vaultManager', () => ({
@@ -42,6 +42,7 @@ vi.mock('../storage/sessionStorage', () => ({
 
 vi.mock('../storage/localStorage', () => ({
   clearCachedVaultBlob: vi.fn(),
+  clearAuthTokens: vi.fn(),
 }));
 
 describe('Background message routing', () => {
@@ -158,13 +159,14 @@ describe('Background message routing', () => {
     expect(response).toEqual({ success: true, data: { message: 'ok' } });
   });
 
-  it('LOGOUT_ALL clears the vault key and cache on success', async () => {
+  it('LOGOUT_ALL clears the vault key, cache, and auth tokens on success', async () => {
     (logoutAll as Mock).mockResolvedValue({ success: true });
 
     const response = await handleMessage({ type: 'LOGOUT_ALL' });
 
     expect(clearVaultKey).toHaveBeenCalled();
     expect(clearCachedVaultBlob).toHaveBeenCalled();
+    expect(clearAuthTokens).toHaveBeenCalled();
     expect(response).toEqual({ success: true });
   });
 

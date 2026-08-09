@@ -4,7 +4,7 @@ import { login, register, logout, isAuthenticated } from '../services/authServic
 import { getDevices, revokeDevice } from '../services/deviceService';
 import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
 import { clearVaultKey } from '../storage/sessionStorage';
-import { clearCachedVaultBlob } from '../storage/localStorage';
+import { clearCachedVaultBlob, clearAuthTokens } from '../storage/localStorage';
 import type { VaultItem } from '@clyro/shared-types';
 
 // Note: Ensure manifest.json "background.service_worker" points to the compiled output of this file.
@@ -100,6 +100,7 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         // Mirrors LOGOUT: revoking every session invalidates this device's own tokens too.
         await clearVaultKey();
         await clearCachedVaultBlob();
+        await clearAuthTokens();
         return { success: true };
       }
       case 'FIND_MATCHING_CREDENTIALS': {
