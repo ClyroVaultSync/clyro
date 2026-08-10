@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 
 # Obsidian local app state (personal, machine-specific)
 .obsidian/
+
+# Local tooling scaffolding (not project source)
+.agents/skills/
