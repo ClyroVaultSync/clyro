@@ -27,7 +27,6 @@
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     sans-serif;
   --font-mono: var(--font-plex-mono), 'IBM Plex Mono', monospace;
-  --font-pixel: var(--font-pixel-source), 'Press Start 2P', monospace;
 }
 
 /*
