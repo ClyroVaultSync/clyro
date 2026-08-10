@@ -31,6 +31,7 @@ import {
   Loader2,
   Menu,
   GitCommit,
+  GitFork,
   Clock,
   Database
 } from 'lucide-react';
@@ -68,6 +69,7 @@ export const Icons = {
   Loader2,
   Menu,
   GitCommit,
+  GitFork,
   Clock,
   Database
 };
