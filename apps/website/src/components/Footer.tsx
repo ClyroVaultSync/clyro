@@ -28,33 +28,32 @@ const COLUMNS = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border px-6 py-16">
-      <div className="mx-auto flex max-w-5xl flex-col gap-12 md:flex-row md:justify-between">
-        <div className="flex flex-col gap-3">
-          <CircularText text="CLYRO • FREE & OPEN SOURCE • " onHover="speedUp" />
+    <footer className="flex shrink-0 items-end justify-between gap-6 border-t border-border px-6 py-4">
+      <div className="flex flex-col items-start gap-2">
+        <div className="flex h-[88px] w-[88px] shrink-0 items-center justify-center">
+          <div className="scale-[0.44]">
+            <CircularText text="CLYRO • FREE & OPEN SOURCE • " onHover="speedUp" />
+          </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-          {COLUMNS.map(column => (
-            <div key={column.title} className="flex flex-col gap-3">
-              <span className="text-sm font-semibold uppercase tracking-wider text-heading">{column.title}</span>
-              <ul className="flex flex-col gap-2">
-                {column.links.map(link => (
-                  <li key={link.label}>
-                    <a href={link.href} className="text-sm text-body transition-colors hover:text-heading">
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <p className="text-xs text-body/70">&copy; {new Date().getFullYear()} Clyro. All rights reserved.</p>
       </div>
 
-      <p className="mx-auto mt-12 max-w-5xl text-xs text-body/70">
-        &copy; {new Date().getFullYear()} Clyro. All rights reserved.
-      </p>
+      <div className="grid grid-cols-3 gap-6">
+        {COLUMNS.map(column => (
+          <div key={column.title} className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-heading">{column.title}</span>
+            <ul className="flex flex-col gap-1">
+              {column.links.map(link => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-xs text-body transition-colors hover:text-heading">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </footer>
   );
 }
