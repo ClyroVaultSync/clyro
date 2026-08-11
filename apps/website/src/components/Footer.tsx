@@ -1,5 +1,6 @@
 import React from 'react';
 import CircularText from './CircularText/CircularText';
+import { Link000, Link001 } from './ui/skiper-ui/skiper40';
 
 const COLUMNS = [
   {
@@ -43,13 +44,19 @@ export default function Footer() {
           <div key={column.title} className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-heading">{column.title}</span>
             <ul className="flex flex-col gap-1">
-              {column.links.map(link => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-xs text-body transition-colors hover:text-heading">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
+              {column.links.map(link => {
+                const LinkComponent = link.label === 'GitHub' ? Link001 : Link000;
+                return (
+                  <li key={link.label}>
+                    <LinkComponent
+                      href={link.href}
+                      className="text-xs text-body transition-colors hover:text-heading"
+                    >
+                      {link.label}
+                    </LinkComponent>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
