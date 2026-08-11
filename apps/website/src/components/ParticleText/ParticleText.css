@@ -10,11 +10,14 @@
 }
 
 .particle-text__canvas {
-  position: absolute;
+  /* Spans the whole browser viewport (not just this component's own layout
+     box) so particles are visibly travelling in from the real screen edges. */
+  position: fixed;
   inset: 0;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
 }
 
 .particle-text__sr {

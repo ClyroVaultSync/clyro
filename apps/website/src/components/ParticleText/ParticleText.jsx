@@ -91,6 +91,11 @@ const ParticleText = ({
     const reducedMotion = false;
     let width = 0;
     let height = 0;
+    // The canvas itself always spans the full browser viewport (not just this
+    // text's own layout box) so particles are visible travelling in from the
+    // real edges of the visitor's screen, converging on the text's position.
+    let vw = 0;
+    let vh = 0;
     let dpr = 1;
 
     const pointer = {
@@ -101,18 +106,36 @@ const ParticleText = ({
       smoothY: 0
     };
 
+    // Distance from a point (x,y), travelling in unit direction (dx,dy), to the
+    // nearest edge of the browser viewport (not just the text's own container) -
+    // this is what makes particles enter from the edges of the visitor's screen.
+    const distanceToViewportEdge = (x, y, dx, dy, vw, vh) => {
+      let t = Infinity;
+      if (dx > 0) t = Math.min(t, (vw - x) / dx);
+      else if (dx < 0) t = Math.min(t, (0 - x) / dx);
+      if (dy > 0) t = Math.min(t, (vh - y) / dy);
+      else if (dy < 0) t = Math.min(t, (0 - y) / dy);
+      return Math.max(t, 0);
+    };
+
     const startGather = (fromScatter = true) => {
       if (!particles.length) return;
 
       const now = performance.now();
-      const spread = reducedMotion ? 0 : scatter;
 
       particles.forEach(particle => {
-        if (fromScatter) {
+        if (fromScatter && !reducedMotion) {
           const angle = particle.seed * Math.PI * 2;
-          const distance = spread * (0.35 + particle.depth * 0.75);
-          particle.x = particle.targetX + Math.cos(angle) * distance + (particle.depth - 0.5) * spread * 0.55;
-          particle.y = particle.targetY + Math.sin(angle) * distance + (particle.seed - 0.5) * spread * 0.55;
+          const dx = Math.cos(angle);
+          const dy = Math.sin(angle);
+          // particle.targetX/Y are already in viewport-absolute coordinates
+          // (the canvas is full-viewport), so no extra container offset here.
+          const distance = distanceToViewportEdge(particle.targetX, particle.targetY, dx, dy, vw, vh) + 24;
+          particle.x = particle.targetX + dx * distance;
+          particle.y = particle.targetY + dy * distance;
+        } else if (fromScatter) {
+          particle.x = particle.targetX;
+          particle.y = particle.targetY;
         }
 
         particle.startX = particle.x;
@@ -139,7 +162,7 @@ const ParticleText = ({
     };
 
     const render = now => {
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, vw, vh);
 
       if (glow && !reducedMotion) {
         ctx.shadowBlur = particleSize * 3;
@@ -214,11 +237,14 @@ const ParticleText = ({
 
       if (width <= 0 || height <= 0) return;
 
+      vw = window.innerWidth;
+      vh = window.innerHeight;
+
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(width * dpr));
-      canvas.height = Math.max(1, Math.floor(height * dpr));
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
+      canvas.width = Math.max(1, Math.floor(vw * dpr));
+      canvas.height = Math.max(1, Math.floor(vh * dpr));
+      canvas.style.width = '100vw';
+      canvas.style.height = '100vh';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const computed = window.getComputedStyle(container);
@@ -273,8 +299,11 @@ const ParticleText = ({
           const alpha = imageData.data[(y * offscreen.width + x) * 4 + 3];
           if (alpha > 40) {
             targets.push({
-              x: width / 2 - offscreen.width / 2 + x,
-              y: height / 2 - offscreen.height / 2 + y,
+              // Viewport-absolute coordinates: this text's own layout box
+              // (rect) just tells us WHERE on screen to place the glyph;
+              // the canvas that draws it spans the whole viewport.
+              x: rect.left + width / 2 - offscreen.width / 2 + x,
+              y: rect.top + height / 2 - offscreen.height / 2 + y,
               alpha: alpha / 255
             });
           }
@@ -290,12 +319,15 @@ const ParticleText = ({
       particles = selected.map((target, index) => {
         const seed = ((index * 9301 + 49297) % 233280) / 233280;
         const depth = 0.45 + (((index * 233 + 97) % 1000) / 1000) * 0.9;
-        const blend = baseRgb && highlightRgb ? clamp(target.x / Math.max(1, width) + (seed - 0.5) * 0.35, 0, 1) : 0;
+        const localX = target.x - rect.left;
+        const blend = baseRgb && highlightRgb ? clamp(localX / Math.max(1, width) + (seed - 0.5) * 0.35, 0, 1) : 0;
         const particleColor = baseRgb && highlightRgb ? rgbToCss(mixRgb(baseRgb, highlightRgb, blend)) : color;
         const angle = seed * Math.PI * 2;
-        const distance = (reducedMotion ? 0 : scatter) * (0.35 + depth * 0.75);
-        const startX = target.x + Math.cos(angle) * distance + (seed - 0.5) * scatter * 0.45;
-        const startY = target.y + Math.sin(angle) * distance + (depth - 0.9) * scatter * 0.45;
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const distance = reducedMotion ? 0 : distanceToViewportEdge(target.x, target.y, dx, dy, vw, vh) + 24;
+        const startX = target.x + dx * distance;
+        const startY = target.y + dy * distance;
 
         return {
           x: reducedMotion ? target.x : startX,
@@ -312,8 +344,8 @@ const ParticleText = ({
         };
       });
 
-      pointer.x = width / 2;
-      pointer.y = height / 2;
+      pointer.x = rect.left + width / 2;
+      pointer.y = rect.top + height / 2;
       pointer.smoothX = pointer.x;
       pointer.smoothY = pointer.y;
 
@@ -339,9 +371,11 @@ const ParticleText = ({
     };
 
     const handlePointerMove = event => {
-      const rect = canvas.getBoundingClientRect();
-      pointer.x = event.clientX - rect.left;
-      pointer.y = event.clientY - rect.top;
+      // pointer.x/y live in viewport-absolute space to match particle
+      // targetX/Y (the canvas spans the full viewport), so no container
+      // offset is subtracted here.
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
       pointer.active = true;
     };
 
@@ -358,22 +392,27 @@ const ParticleText = ({
       if (trigger === 'click') startGather(true);
     };
 
-    canvas.addEventListener('pointerenter', handlePointerEnter);
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerleave', handlePointerLeave);
-    canvas.addEventListener('click', handleClick);
+    // Listeners live on the container (sized to the text itself), not the
+    // canvas (which spans the full viewport with pointer-events: none so it
+    // never blocks the rest of the page).
+    container.addEventListener('pointerenter', handlePointerEnter);
+    container.addEventListener('pointermove', handlePointerMove);
+    container.addEventListener('pointerleave', handlePointerLeave);
+    container.addEventListener('click', handleClick);
 
     const resizeObserver = new ResizeObserver(queueSample);
     resizeObserver.observe(container);
+    window.addEventListener('resize', queueSample);
     sampleText();
 
     return () => {
       buildId += 1;
       resizeObserver.disconnect();
-      canvas.removeEventListener('pointerenter', handlePointerEnter);
-      canvas.removeEventListener('pointermove', handlePointerMove);
-      canvas.removeEventListener('pointerleave', handlePointerLeave);
-      canvas.removeEventListener('click', handleClick);
+      window.removeEventListener('resize', queueSample);
+      container.removeEventListener('pointerenter', handlePointerEnter);
+      container.removeEventListener('pointermove', handlePointerMove);
+      container.removeEventListener('pointerleave', handlePointerLeave);
+      container.removeEventListener('click', handleClick);
 
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
       if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
