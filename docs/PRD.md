@@ -23,10 +23,13 @@
 | Future Platforms | Firefox, Safari, Edge, Mobile Applications |
 
 | Last Updated | July 2026 |
+| Status Note | **Superseded by a 2026-08-12 architecture pivot, rewrite owed — see notice below** |
 
 
 
-\---
+---
+> **⚠ Superseded 2026-08-12.** This PRD describes Clyro as **cloud-first** with Clyro-hosted accounts (email/phone registration, email/SMS verification, trusted devices, backend-mediated sync). That model was replaced by **local-first, bring-your-own-storage**: no Clyro account at all; the extension picks a Storage Provider once at setup (a self-run local server + SQLite/BYO-database, or Google Drive/Dropbox); the website's Dashboard reaches storage only through the installed extension. Master-password-derived encryption is unchanged. This materially changes the Executive Summary, Product Philosophy §4 ("Cloud-First Experience"), the User Journey, Functional Requirements §1 (Account Management) and §9 (Trusted Devices), the Version 1.0 roadmap's feature list, and several Assumptions/Constraints below — all still describe the superseded account-based product. See `knowledge/Decisions/Local-First Bring-Your-Own-Storage Pivot.md` and `knowledge/Features/Local-First Architecture.md` for the replacement design; full rewrite tracked as owed work in `knowledge/NEXT_TASK.md`.
+---
 
 
 

@@ -8,9 +8,17 @@
 
 \*\*Document Version:\*\* 1.0.0  
 
-\*\*Status:\*\* Draft (Under Review)  
+\*\*Status:\*\* Draft (Under Review) — **superseded by a 2026-08-12 architecture pivot, rewrite owed**
 
 \*\*Last Updated:\*\* July 2026
+
+
+
+---
+
+> **⚠ Superseded 2026-08-12.** This entire document describes Clyro as **cloud-first**: Clyro operating a shared backend and PostgreSQL database for every user's account and vault sync. That model was replaced by a **local-first, bring-your-own-storage** architecture — no Clyro-run backend for regular use; the extension picks a Storage Provider once at setup (a self-run local server + SQLite/BYO-database, or Google Drive/Dropbox); the website's Dashboard reaches storage only by messaging the installed extension, never directly. Everything below this notice is retained as historical/reference material — most of the zero-knowledge crypto model (Argon2id, client-side encryption, "backend never decrypts") is **unchanged and still accurate** — but the System Architecture, Backend Architecture, Authentication & Session Lifecycle, and Technology Stack sections specifically describe the superseded cloud/account model and need a full rewrite, not just amendment. See `knowledge/Decisions/Local-First Bring-Your-Own-Storage Pivot.md` and `knowledge/Features/Local-First Architecture.md` for the accepted replacement design. Full rewrite of this document is tracked as owed work in `knowledge/NEXT_TASK.md`.
+
+---
 
 
 

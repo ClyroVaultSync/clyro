@@ -6,7 +6,11 @@ Version: 1.0.0
 
 
 
-Status: Draft
+Status: Draft — **superseded by a 2026-08-12 architecture pivot, rewrite owed**
+
+---
+> **⚠ Superseded 2026-08-12.** This document describes the API of a shared, Clyro-operated cloud backend (Auth, Devices, Sessions APIs included). That backend is being trimmed into an optional, user-run **Local Sync Server** — no Clyro-hosted account, no Devices/Sessions API (both were account concepts). The Vault API's shape (`encryptedVault` blob + `vaultVersion`, optimistic concurrency, `/api/v1/vault*` routes) is **kept as the Local Sync Server's contract**, since it was already storage-agnostic. The Authentication API section below no longer applies. See `knowledge/Decisions/Local-First Bring-Your-Own-Storage Pivot.md` and `knowledge/Features/Local-First Architecture.md` for the replacement design; full rewrite tracked as owed work in `knowledge/NEXT_TASK.md`.
+---
 
 
 

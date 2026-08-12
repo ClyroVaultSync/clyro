@@ -6,7 +6,11 @@ Version: 1.0.0
 
 
 
-Status: Draft
+Status: Draft — **superseded by a 2026-08-12 architecture pivot, rewrite owed**
+
+---
+> **⚠ Superseded 2026-08-12.** This schema (Users, Vaults, Trusted Devices, Sessions, Verification Tokens) was designed for a shared, Clyro-operated cloud database. Under the local-first pivot, there's no Clyro-hosted account, so the Users/Trusted Devices/Sessions/Verification Tokens tables and everything below about them **no longer applies** and is being dropped, not migrated. The **Vaults table's shape survives** (`encrypted_vault` + `vault_version` + `vault_salt`, optimistic concurrency via Last-Change-Wins) as the schema for the new, much smaller **Local Sync Server** database (SQLite by default, or a user-provided engine) — effectively just that one table now, since there's no `user_id` to own multiple vaults under. See `knowledge/Decisions/Local-First Bring-Your-Own-Storage Pivot.md` and `knowledge/Features/Local-First Architecture.md`; full rewrite tracked as owed work in `knowledge/NEXT_TASK.md`.
+---
 
 
 
