@@ -2,7 +2,7 @@
   "name": "clyro",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r run dev",
+    "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test"
