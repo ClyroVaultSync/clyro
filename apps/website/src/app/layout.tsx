@@ -11,8 +11,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata = {
-  title: 'Clyro — Cloud-First Zero-Knowledge Password Vault Companion',
-  description: 'Manage your trusted devices, sessions, and encrypted vault with Clyro.'
+  title: 'Clyro — Local-First Zero-Knowledge Password Vault',
+  description: 'A local-first, zero-knowledge password manager with bring-your-own-storage sync.'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
