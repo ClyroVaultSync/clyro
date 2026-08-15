@@ -147,3 +147,7 @@ vite.config.ts.timestamp-*
 
 # Local tooling scaffolding (not project source)
 .agents/skills/
+
+# Extension signing key (private half of apps/extension/manifest.json's committed "key" field —
+# only needed later for packaging a signed .crx; never commit private keys)
+apps/extension/clyro-extension-key.pem
