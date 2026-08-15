@@ -1,12 +1,8 @@
 import fastify from 'fastify';
-import jwt from '@fastify/jwt';
 import routes from './routes';
-import authenticatePlugin from './plugins/authenticate';
 
 const server = fastify();
 
-server.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret-fallback' });
-server.register(authenticatePlugin);
 server.register(routes);
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;

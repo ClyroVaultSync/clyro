@@ -5,12 +5,11 @@ import { prisma } from '../db';
 import { successResponse, errorResponse } from '../utils/response';
 
 function serializeVault(vault: {
-  id: string; userId: string; encryptedVault: string; vaultSalt: string; vaultVersion: number;
+  id: string; encryptedVault: string; vaultSalt: string; vaultVersion: number;
   lastModified: Date; createdAt: Date; updatedAt: Date;
 }) {
   return {
     id: vault.id,
-    userId: vault.userId,
     encryptedVault: vault.encryptedVault,
     vaultSalt: vault.vaultSalt,
     vaultVersion: vault.vaultVersion,
@@ -22,13 +21,12 @@ function serializeVault(vault: {
 
 export default async function vaultRoutes(fastify: FastifyInstance) {
   // GET /api/v1/vault
-  fastify.get('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/', async (_request, reply) => {
     try {
-      const { userId } = request.user as { userId: string; sessionId: string };
-      const vault = await prisma.vault.findUnique({ where: { userId } });
+      const vault = await prisma.vault.findFirst();
 
       if (!vault) {
-        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
       }
 
       return reply.status(200).send(successResponse(serializeVault(vault)));
@@ -39,16 +37,14 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   // GET /api/v1/vault/metadata
-  fastify.get('/metadata', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/metadata', async (_request, reply) => {
     try {
-      const { userId } = request.user as { userId: string; sessionId: string };
-      const vault = await prisma.vault.findUnique({
-        where: { userId },
+      const vault = await prisma.vault.findFirst({
         select: { vaultVersion: true, lastModified: true },
       });
 
       if (!vault) {
-        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
       }
 
       return reply.status(200).send(successResponse({
@@ -62,19 +58,17 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/vault
-  fastify.post('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/', async (request, reply) => {
     try {
-      const { userId } = request.user as { userId: string; sessionId: string };
       const parsed = createVaultSchema.parse(request.body);
 
-      const existing = await prisma.vault.findUnique({ where: { userId } });
+      const existing = await prisma.vault.findFirst();
       if (existing) {
-        return reply.status(409).send(errorResponse('CONFLICT', 'A vault already exists for this user. Use PUT to update instead.'));
+        return reply.status(409).send(errorResponse('CONFLICT', 'A vault already exists on this server. Use PUT to update instead.'));
       }
 
       const vault = await prisma.vault.create({
         data: {
-          userId,
           encryptedVault: parsed.encryptedVault,
           vaultSalt: parsed.vaultSalt,
           vaultVersion: parsed.vaultVersion,
@@ -92,14 +86,13 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   // PUT /api/v1/vault
-  fastify.put('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.put('/', async (request, reply) => {
     try {
-      const { userId } = request.user as { userId: string; sessionId: string };
       const parsed = updateVaultSchema.parse(request.body);
 
-      const existing = await prisma.vault.findUnique({ where: { userId } });
+      const existing = await prisma.vault.findFirst();
       if (!existing) {
-        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user. Use POST to create one first.'));
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server. Use POST to create one first.'));
       }
 
       // Optimistic concurrency control: reject stale updates
@@ -115,7 +108,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       const vault = await prisma.vault.update({
-        where: { userId },
+        where: { id: existing.id },
         data: {
           encryptedVault: parsed.encryptedVault,
           vaultVersion: parsed.vaultVersion,
@@ -134,16 +127,14 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   // DELETE /api/v1/vault
-  fastify.delete('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.delete('/', async (_request, reply) => {
     try {
-      const { userId } = request.user as { userId: string; sessionId: string };
-
-      const existing = await prisma.vault.findUnique({ where: { userId } });
+      const existing = await prisma.vault.findFirst();
       if (!existing) {
-        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists for this user.'));
+        return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
       }
 
-      await prisma.vault.delete({ where: { userId } });
+      await prisma.vault.delete({ where: { id: existing.id } });
 
       return reply.status(200).send(successResponse({ message: 'Vault deleted successfully.' }));
     } catch (error) {

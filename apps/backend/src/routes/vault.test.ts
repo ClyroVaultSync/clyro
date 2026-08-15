@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fastify from 'fastify';
-import jwt from '@fastify/jwt';
 import vaultRoutes from './vault';
 import { prisma } from '../db';
-import authenticatePlugin from '../plugins/authenticate';
 
 vi.mock('../db', () => ({
   prisma: {
     vault: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -18,21 +16,16 @@ vi.mock('../db', () => ({
 
 describe('Vault Routes', () => {
   let app: ReturnType<typeof fastify>;
-  let token: string;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     app = fastify();
-    app.register(jwt, { secret: 'test-secret' });
-    app.register(authenticatePlugin);
     app.register(vaultRoutes, { prefix: '/api/v1/vault' });
     await app.ready();
-    token = app.jwt.sign({ userId: 'user-1', sessionId: 'session-1' });
   });
 
   const mockVault = {
     id: 'vault-1',
-    userId: 'user-1',
     encryptedVault: 'encrypted-data',
     vaultSalt: 'test-salt',
     vaultVersion: 15,
@@ -43,44 +36,34 @@ describe('Vault Routes', () => {
 
   describe('GET /', () => {
     it('should return vault successfully', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(mockVault as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
 
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().data.vaultVersion).toBe(15);
-      expect(prisma.vault.findUnique).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.vault.findFirst).toHaveBeenCalledWith();
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(null as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
 
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
       expect(response.json().error.code).toBe('NOT_FOUND');
     });
-
-    it('should return 401 without auth', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/v1/vault',
-      });
-      expect(response.statusCode).toBe(401);
-    });
   });
 
   describe('GET /metadata', () => {
     it('should return metadata successfully', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue({
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue({
         vaultVersion: 15,
         lastModified: mockVault.lastModified,
       } as never);
@@ -88,7 +71,6 @@ describe('Vault Routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault/metadata',
-        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -97,35 +79,25 @@ describe('Vault Routes', () => {
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(null as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
 
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/v1/vault/metadata',
-        headers: { authorization: `Bearer ${token}` },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it('should return 401 without auth', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault/metadata',
       });
-      expect(response.statusCode).toBe(401);
+
+      expect(response.statusCode).toBe(404);
     });
   });
 
   describe('POST /', () => {
     it('should create a vault successfully', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(null as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
       vi.mocked(prisma.vault.create).mockResolvedValue(mockVault as never);
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'encrypted-data',
           vaultSalt: 'test-salt',
@@ -137,7 +109,6 @@ describe('Vault Routes', () => {
       expect(response.json().data.vaultVersion).toBe(15); // Returns mocked vault
       expect(prisma.vault.create).toHaveBeenCalledWith({
         data: {
-          userId: 'user-1',
           encryptedVault: 'encrypted-data',
           vaultSalt: 'test-salt',
           vaultVersion: 1,
@@ -149,7 +120,6 @@ describe('Vault Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'encrypted-data',
           vaultVersion: 1,
@@ -162,12 +132,11 @@ describe('Vault Routes', () => {
     });
 
     it('should return 409 if vault already exists', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(mockVault as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'encrypted-data',
           vaultSalt: 'test-salt',
@@ -183,7 +152,6 @@ describe('Vault Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           vaultVersion: 1,
           // Missing encryptedVault
@@ -193,30 +161,17 @@ describe('Vault Routes', () => {
       expect(response.statusCode).toBe(422);
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
-
-    it('should return 401 without auth', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'test',
-          vaultVersion: 1,
-        },
-      });
-      expect(response.statusCode).toBe(401);
-    });
   });
 
   describe('PUT /', () => {
     it('should update vault successfully', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(mockVault as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
       const updatedVault = { ...mockVault, vaultVersion: 16 };
       vi.mocked(prisma.vault.update).mockResolvedValue(updatedVault as never);
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'new-encrypted-data',
           vaultVersion: 16,
@@ -226,7 +181,7 @@ describe('Vault Routes', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().data.vaultVersion).toBe(16);
       expect(prisma.vault.update).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
+        where: { id: mockVault.id },
         data: {
           encryptedVault: 'new-encrypted-data',
           vaultVersion: 16,
@@ -236,12 +191,11 @@ describe('Vault Routes', () => {
     });
 
     it('should return 409 if vault version is stale/equal', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(mockVault as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'new-encrypted-data',
           vaultVersion: 15, // Same as existing
@@ -254,12 +208,11 @@ describe('Vault Routes', () => {
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(null as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           encryptedVault: 'new-encrypted-data',
           vaultVersion: 16,
@@ -274,7 +227,6 @@ describe('Vault Routes', () => {
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
         payload: {
           vaultVersion: 'string-instead-of-number',
           encryptedVault: 'test',
@@ -283,55 +235,33 @@ describe('Vault Routes', () => {
 
       expect(response.statusCode).toBe(422);
     });
-
-    it('should return 401 without auth', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'test',
-          vaultVersion: 16,
-        },
-      });
-      expect(response.statusCode).toBe(401);
-    });
   });
 
   describe('DELETE /', () => {
     it('should delete vault successfully', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(mockVault as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
       vi.mocked(prisma.vault.delete).mockResolvedValue(mockVault as never);
 
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().success).toBe(true);
-      expect(prisma.vault.delete).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.vault.delete).toHaveBeenCalledWith({ where: { id: mockVault.id } });
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findUnique).mockResolvedValue(null as never);
+      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
 
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/v1/vault',
-        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
       expect(response.json().error.code).toBe('NOT_FOUND');
-    });
-
-    it('should return 401 without auth', async () => {
-      const response = await app.inject({
-        method: 'DELETE',
-        url: '/api/v1/vault',
-      });
-      expect(response.statusCode).toBe(401);
     });
   });
 });
