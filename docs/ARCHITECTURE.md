@@ -1,2506 +1,918 @@
-\# Clyro Architecture Document
+# Clyro Architecture Document
 
-
-
-\*\*Project:\*\* Clyro  
-
-\*\*Organization:\*\* ClyroVaultSync  
-
-\*\*Document Version:\*\* 1.0.0  
-
-\*\*Status:\*\* Draft (Under Review) — **superseded by a 2026-08-12 architecture pivot, rewrite owed**
-
-\*\*Last Updated:\*\* July 2026
-
-
+**Project:** Clyro
+**Organization:** ClyroVaultSync
+**Document Version:** 2.0.0
+**Status:** Draft (Under Review)
+**Last Updated:** August 2026
 
 ---
 
-> **⚠ Superseded 2026-08-12.** This entire document describes Clyro as **cloud-first**: Clyro operating a shared backend and PostgreSQL database for every user's account and vault sync. That model was replaced by a **local-first, bring-your-own-storage** architecture — no Clyro-run backend for regular use; the extension picks a Storage Provider once at setup (a self-run local server + SQLite/BYO-database, or Google Drive/Dropbox); the website's Dashboard reaches storage only by messaging the installed extension, never directly. Everything below this notice is retained as historical/reference material — most of the zero-knowledge crypto model (Argon2id, client-side encryption, "backend never decrypts") is **unchanged and still accurate** — but the System Architecture, Backend Architecture, Authentication & Session Lifecycle, and Technology Stack sections specifically describe the superseded cloud/account model and need a full rewrite, not just amendment. See `knowledge/Decisions/Local-First Bring-Your-Own-Storage Pivot.md` and `knowledge/Features/Local-First Architecture.md` for the accepted replacement design. Full rewrite of this document is tracked as owed work in `knowledge/NEXT_TASK.md`.
-
----
-
-
-
-\---
-
-
-
-\# Purpose
-
-
+# Purpose
 
 This document defines the technical architecture of Clyro Version 1.0.
 
-
-
 It describes how the system is structured, how its components interact, and the engineering principles that guide implementation.
 
-
-
-Unlike the Product Requirements Document (PRD), which defines \*\*what\*\* Clyro should do, this document defines \*\*how\*\* those requirements are implemented.
-
-
+Unlike the Product Requirements Document (PRD), which defines **what** Clyro should do, this document defines **how** those requirements are implemented.
 
 This document is intended for:
 
-
-
-\- Software engineers
-
-\- AI coding assistants
-
-\- Future maintainers
-
-\- Security reviewers
-
-\- Contributors
-
-
+- Software engineers
+- AI coding assistants
+- Future maintainers
+- Security reviewers
+- Contributors
 
 Every implementation should align with the architectural decisions documented here.
 
+---
 
-
-\---
-
-
-
-\# Architecture Goals
-
-
+# Architecture Goals
 
 The architecture is designed to achieve the following objectives:
 
-
-
-\- Security first
-
-\- True zero-knowledge encryption
-
-\- Cloud-first synchronization
-
-\- Simple and maintainable design
-
-\- Modular components
-
-\- Reliable synchronization
-
-\- Extensibility for future platforms
-
-\- Clear separation of responsibilities
-
-
+- Security first
+- True zero-knowledge encryption
+- Local-first operation with user-chosen sync
+- Simple and maintainable design
+- Modular components
+- Reliable synchronization
+- Extensibility for future platforms
+- Clear separation of responsibilities
 
 Where trade-offs exist, security and maintainability take priority over feature complexity.
 
+---
 
-
-\---
-
-
-
-\# Architectural Principles
-
-
+# Architectural Principles
 
 The following principles guide all technical decisions.
 
+## 1. Documentation First
 
+Architecture is defined before implementation. Changes to architecture should be documented before code is written.
 
-\## 1. Documentation First
+## 2. Security First
 
+Security takes priority over convenience. No architectural decision should weaken the zero-knowledge security model.
 
+## 3. Simplicity
 
-Architecture is defined before implementation.
+Prefer simple, understandable solutions over unnecessary complexity. Avoid premature optimization.
 
+## 4. Separation of Responsibilities
 
+Each major component should have a clearly defined responsibility. Components should communicate through well-defined interfaces.
 
-Changes to architecture should be documented before code is written.
+## 5. User Ownership of Storage
 
+Clyro does not operate a shared backend or hold user accounts. The user chooses where their encrypted vault lives — a self-run local server, or their own Google Drive/Dropbox — and can move it between those choices at any time via export/import.
 
+## 6. Scalability
 
-\---
+The architecture should support future expansion without requiring major redesign. Version 1.0 focuses on Chromium browsers, but the architecture should accommodate future browser and mobile clients.
 
+## 7. Maintainability
 
-
-\## 2. Security First
-
-
-
-Security takes priority over convenience.
-
-
-
-No architectural decision should weaken the zero-knowledge security model.
-
-
-
-\---
-
-
-
-\## 3. Simplicity
-
-
-
-Prefer simple, understandable solutions over unnecessary complexity.
-
-
-
-Avoid premature optimization.
-
-
-
-\---
-
-
-
-\## 4. Separation of Responsibilities
-
-
-
-Each major component should have a clearly defined responsibility.
-
-
-
-Components should communicate through well-defined interfaces.
-
-
-
-\---
-
-
-
-\## 5. Scalability
-
-
-
-The architecture should support future expansion without requiring major redesign.
-
-
-
-Version 1.0 focuses on Chromium browsers, but the architecture should accommodate future browser and mobile clients.
-
-
-
-\---
-
-
-
-\## 6. Maintainability
-
-
-
-The codebase should remain readable, modular, and easy to extend.
-
-
-
-Every component should have a clear ownership boundary.
+The codebase should remain readable, modular, and easy to extend. Every component should have a clear ownership boundary.
 
 ---
 
+# High-Level System Architecture
 
-
-\# High-Level System Architecture
-
-
-
-Clyro Version 1.0 consists of four primary components that work together while maintaining a true zero-knowledge security model.
-
-
+Clyro Version 1.0 has **no Clyro-run backend for regular use**. The extension is the product; it picks one **Storage Provider** at setup and talks to it directly. The website is a marketing site and a launcher — it never touches vault data.
 
 ```
-
-&#x20;                          +----------------------+
-
-&#x20;                          |   Clyro Website      |
-
-&#x20;                          |  (React Frontend)    |
-
-&#x20;                          +----------+-----------+
-
-&#x20;                                     |
-
-&#x20;                                     | HTTPS
-
-&#x20;                                     |
-
-&#x20;                          +----------v-----------+
-
-&#x20;                          |     Backend API      |
-
-&#x20;                          |      (Fastify)       |
-
-&#x20;                          +----------+-----------+
-
-&#x20;                                     |
-
-&#x20;                                     |
-
-&#x20;                          +----------v-----------+
-
-&#x20;                          |    PostgreSQL DB     |
-
-&#x20;                          | Authentication Data  |
-
-&#x20;                          | Encrypted Vault Data |
-
-&#x20;                          +----------------------+
-
-
-
-&#x20;                   HTTPS + End-to-End Encryption
-
-
-
-+---------------------------------------------------------------+
-
-
-
-&#x20;                Chromium Browser
-
-
-
-+---------------------------------------------------------------+
-
-
-
-+------------------------+
-
-|  Clyro Extension       |
-
-|------------------------|
-
-| UI                     |
-
-| Autofill Engine        |
-
-| Password Capture       |
-
-| Vault Search           |
-
-| Sync Client            |
-
-| Crypto Engine          |
-
-| Local Encrypted Vault  |
-
-+------------------------+
-
+                    Chromium Browser
++--------------------------------------------------------+
+|  Clyro Extension                                        |
+|  UI (popup + full-page vault tab) · Autofill            |
+|  Crypto Engine · Vault Manager · Sync Provider           |
++-----------------------+----------------------------------+
+                          |
+          (exactly one active Storage Provider)
+                          |
+        +-----------------+------------------+
+        |                 |                  |
+        v                 v                  v
+  Local Sync Server   Google Drive       Dropbox
+  (self-run, SQLite)  (appDataFolder)    (App Folder)
 ```
 
-
-
-\---
-
-
-
-\# Core Components
-
-
-
-\## 1. Browser Extension
-
-
-
-The browser extension is the primary client application.
-
-
-
-Responsibilities include:
-
-
-
-\- User authentication
-
-\- Vault unlocking
-
-\- Password generation
-
-\- Password capture
-
-\- Autofill
-
-\- Auto Login
-
-\- Vault search
-
-\- Encryption and decryption
-
-\- Synchronization
-
-\- Trusted device management
-
-
-
-The extension is responsible for handling all sensitive operations involving plaintext credentials.
-
-
-
-\---
-
-
-
-\## 2. Backend API
-
-
-
-The backend coordinates communication between client devices.
-
-
-
-Responsibilities include:
-
-
-
-\- User authentication
-
-\- Email verification
-
-\- SMS verification
-
-\- Trusted device management
-
-\- Secure synchronization
-
-\- Storage of encrypted vault data
-
-
-
-The backend \*\*never decrypts user vaults\*\* and \*\*never stores the user's master password\*\*.
-
-
-
-\---
-
-
-
-\## 3. Database
-
-
-
-The database stores only the information required for account management and encrypted synchronization.
-
-
-
-Examples include:
-
-
-
-\- User accounts
-
-\- Verification status
-
-\- Trusted devices
-
-\- Encrypted vault blobs
-
-\- Synchronization metadata
-
-
-
-No plaintext credentials are stored.
-
-
-
-\---
-
-
-
-\## 4. Companion Website
-
-
-
-The companion website provides account-related functionality.
-
-
-
-Examples include:
-
-
-
-\- Account registration
-
-\- Login
-
-\- Email verification
-
-\- Phone verification
-
-\- Download links
-
-\- Documentation
-
-\- Future account management
-
-
-
-The website is \*\*not\*\* intended to replace the browser extension for vault operations.
-
-
-
-Sensitive vault interactions remain inside the extension.
-
-
-
-\---
-
-
-
-\# System Boundaries
-
-
-
-The architecture intentionally separates responsibilities.
-
-
-
-\## Client Responsibilities
-
-
-
-The client performs:
-
-
-
-\- Encryption
-
-\- Decryption
-
-\- Password generation
-
-\- Vault search
-
-\- Autofill
-
-\- Password capture
-
-
-
-Sensitive plaintext data never leaves the client.
-
-
-
-\---
-
-
-
-\## Server Responsibilities
-
-
-
-The server performs:
-
-
-
-\- Authentication
-
-\- Synchronization
-
-\- Verification
-
-\- Storage
-
-\- Device management
-
-
-
-The server never accesses decrypted vault contents.
-
-
-
-\---
-
-
-
-\# Architectural Philosophy
-
-
-
-Clyro follows a \*\*client-centric architecture\*\*.
-
-
-
-The client owns all cryptographic operations.
-
-
-
-The backend acts as a secure coordination and synchronization service rather than a trusted vault.
+```
+   Clyro Website (marketing + launcher, no vault data)
+                          |
+          externally_connectable bridge
+          (status only — GET_STATUS / OPEN_VAULT)
+                          |
+                          v
+                  Clyro Extension
+```
+
+The website and the extension are connected only by a narrow, status-only bridge (see [Extension ↔ Website Bridge](#extension--website-bridge)). The website cannot reach a user's local server or cloud storage directly, and never receives credentials, master passwords, or decrypted vault contents.
 
 ---
 
+# Core Components
 
+## 1. Browser Extension
 
-\# Browser Extension Architecture
+The browser extension is the product. It is the only component that ever handles plaintext credentials.
 
+Responsibilities include:
 
+- Storage provider selection and setup (Local / Google Drive / Dropbox)
+- Vault unlocking
+- Password generation
+- Password capture
+- Autofill
+- Auto Login
+- Vault search
+- Encryption and decryption
+- Synchronization with the active storage provider
+- Encrypted vault export / import
 
-The Chromium extension is the primary client application and contains the majority of Clyro's business logic.
+The extension hosts the vault UI itself, as a full-page extension tab — not the website. See [Vault UI Placement](#vault-ui-placement) below.
 
+## 2. Storage Providers
 
+Each user has exactly one active Storage Provider at a time, chosen during first-run setup:
 
-To keep the codebase modular and maintainable, the extension is divided into independent components.
+- **Local** — a small self-run background application (the Local Sync Server) storing the vault in a bundled SQLite database on the user's own machine.
+- **Google Drive** — the encrypted vault stored as a single file in the user's Drive `appDataFolder`, connected via `chrome.identity` OAuth.
+- **Dropbox** — the encrypted vault stored via Dropbox's file API, same OAuth pattern.
 
+All three are treated as opaque blob stores. None of them can decrypt vault contents — see [SyncProvider Interface](#syncprovider-interface).
 
+## 3. Companion Website
+
+The companion website provides marketing and a launcher for the extension. Examples include:
+
+- Product marketing and homepage
+- Local setup instructions (installing the Local Sync Server, pairing)
+- Cloud setup instructions (connecting Google Drive / Dropbox)
+- Dashboard launcher (opens the extension's vault tab if installed; shows an install prompt if not)
+- Password generator (standalone, client-side)
+- Download links and documentation
+
+The website is **not** a vault interface. It never renders credentials, never receives a decryption key, and structurally cannot reach a user's local server or cloud storage — see [Extension ↔ Website Bridge](#extension--website-bridge).
+
+---
+
+# System Boundaries
+
+## Client (Extension) Responsibilities
+
+The extension performs:
+
+- Storage provider connection and switching
+- Encryption
+- Decryption
+- Password generation
+- Vault search
+- Autofill
+- Password capture
+- Encrypted export / import
+
+Sensitive plaintext data never leaves the extension.
+
+## Storage Provider Responsibilities
+
+Each storage provider (Local Sync Server, Google Drive, Dropbox) performs:
+
+- Accepting and returning an opaque encrypted vault blob
+- Optimistic-concurrency version checking
+
+No storage provider ever accesses decrypted vault contents, and none of them perform authentication of the *user* — there is no Clyro account. The Local Sync Server authenticates *callers* (see [Local Sync Server](#local-sync-server-architecture)) via a pairing token, which is a device-pairing concern, not a user-identity one.
+
+## Website Responsibilities
+
+The website performs:
+
+- Presenting marketing content and setup instructions
+- Pinging the extension for install/lock status (`GET_STATUS`)
+- Asking the extension to open its vault tab (`OPEN_VAULT`)
+
+The website never accesses vault data, encrypted or otherwise.
+
+---
+
+# Architectural Philosophy
+
+Clyro follows a **client-centric architecture**. The extension owns all cryptographic operations and all storage-provider communication. There is no Clyro-run coordination service standing between the user and their data — the user's chosen storage is the only durable copy beyond the extension's own local cache.
+
+---
+
+# Browser Extension Architecture
+
+The Chromium extension contains the majority of Clyro's business logic and is organized into independent components.
 
 ```
-
 +--------------------------------------------------+
-
 |                Browser Extension                 |
-
 +--------------------------------------------------+
-
-|                                                  |
-
-|  Extension UI                                   |
-
-|        │                                         |
-
-|        ▼                                         |
-
-|  Authentication Manager                          |
-
-|        │                                         |
-
-|        ▼                                         |
-
-|  Vault Manager                                   |
-
-|   ├── Crypto Engine                              |
-
-|   ├── Vault Search                               |
-
-|   ├── Password Generator                         |
-
-|   ├── Password Capture                           |
-
-|   ├── Autofill Engine                            |
-
-|   ├── Auto Login                                 |
-
-|   └── Local Vault Storage                        |
-
-|                                                  |
-
-|                 │                                |
-
-|                 ▼                                |
-
-|             Sync Client                          |
-
-|                 │                                |
-
-|             HTTPS API                            |
-
+|  Popup UI (quick access)                         |
+|  Full-page Vault Tab (vault.html) — main screen   |
+|        |                                          |
+|        v                                          |
+|  Storage Picker / Setup (first run)               |
+|        |                                          |
+|        v                                          |
+|  Vault Manager                                    |
+|   |-- Crypto Engine                               |
+|   |-- Vault Search                                |
+|   |-- Password Generator                          |
+|   |-- Password Capture                            |
+|   |-- Autofill Engine                             |
+|   |-- Auto Login                                  |
+|   |-- Local Cache (encrypted)                     |
+|   `-- Export / Import                             |
+|        |                                          |
+|        v                                          |
+|  Sync Provider (SyncProvider interface)           |
+|   |-- LocalProvider    -> Local Sync Server        |
+|   |-- GoogleDriveProvider -> Google Drive          |
+|   `-- DropboxProvider  -> Dropbox                  |
+|                                                    |
+|  Bridge Handler (onMessageExternal)                |
+|   -> GET_STATUS / OPEN_VAULT from the website      |
 +--------------------------------------------------+
-
 ```
 
+---
 
+# Extension Components
 
-\---
+## Vault UI Placement
 
+The vault UI is a **full-page extension tab** (`chrome-extension://<id>/vault.html`), not a page on the website. This is the product's main screen. The popup is a slimmed-down quick-access surface (search, copy, autofill) that links to the full tab.
 
+This placement is deliberate, not incidental: a website page runs in a context any injected script on that page can read. Keeping the vault UI inside the extension means decrypted vault contents never exist inside an ordinary web page's JS context. See `docs/SECURITY.md` for the trust boundary this establishes.
 
-\# Extension Components
+### Responsibilities
 
-
-
-\## Extension UI
-
-
-
-\### Responsibilities
-
-
-
-\- Login screen
-
-\- Vault interface
-
-\- Settings
-
-\- Password generator interface
-
-\- Search interface
-
-\- Trusted device management
-
-\- User notifications
-
-
+- First-run storage picker (Local vs. Cloud)
+- Vault list, search, add/edit/delete credentials
+- Password generator interface
+- Settings — Storage & Sync (connect, reconnect, switch provider)
+- Export / import
+- User notifications
 
 The UI should remain lightweight and delegate business logic to dedicated modules.
 
+## Storage Picker (First Run)
 
+Replaces any concept of account login. On first run:
 
-\---
+- **Local** branches to install instructions for the Local Sync Server, then pairing.
+- **Cloud** branches to Google Drive or Dropbox OAuth via `chrome.identity`.
 
+Neither path involves a Clyro account or a login screen.
 
+## Vault Manager
 
-\## Authentication Manager
-
-
-
-\### Responsibilities
-
-
-
-\- User authentication
-
-\- Session validation
-
-\- Vault unlock
-
-\- Vault lock
-
-\- Trusted device verification
-
-\- Browser session lifecycle
-
-
-
-This component controls access to the vault.
-
-
-
-\---
-
-
-
-\## Vault Manager
-
-
-
-The Vault Manager acts as the central coordinator for all vault operations.
-
-
+The Vault Manager is the central coordinator for all vault operations.
 
 Responsibilities include:
 
+- Reading credentials
+- Writing credentials
+- Updating credentials
+- Deleting credentials
+- Organizing vault entries
+- Coordinating encryption
+- Coordinating synchronization via the active Sync Provider
+- Coordinating export / import
 
+The Vault Manager never talks to a storage backend directly — it always goes through `getActiveProvider()`. This is what lets `createVault`, `unlockVault`, `lockVault`, `getVaultItems`, and `saveVaultItems` stay identical regardless of which storage provider is active.
 
-\- Reading credentials
+## Crypto Engine
 
-\- Writing credentials
-
-\- Updating credentials
-
-\- Deleting credentials
-
-\- Organizing vault entries
-
-\- Coordinating encryption
-
-\- Coordinating synchronization
-
-
-
-The Vault Manager should not directly communicate with the backend.
-
-
-
-All synchronization is delegated to the Sync Client.
-
-
-
-\---
-
-
-
-\## Crypto Engine
-
-
-
-The Crypto Engine performs all cryptographic operations.
-
-
+The Crypto Engine performs all cryptographic operations, unchanged by the storage-provider model.
 
 Responsibilities include:
 
+- Key derivation (Argon2id)
+- Encryption / decryption (XChaCha20-Poly1305)
+- Secure random generation
+- Key management in memory
 
+The Crypto Engine is the only module responsible for handling encryption keys, and is implemented in `packages/crypto`, shared across the monorepo. See [[Vault Crypto]] in the knowledge base.
 
-\- Key derivation (Argon2id)
+## Sync Provider
 
-\- Encryption
+### SyncProvider Interface
 
-\- Decryption
+All three storage providers implement the same interface, so the rest of the extension never needs to know which one is active:
 
-\- Secure random generation
+```ts
+interface SyncProvider {
+  id: 'local' | 'google-drive' | 'dropbox';
+  getVault(): Promise<{ encryptedVault: string; vaultVersion: number; vaultSalt: string } | null>;
+  createVault(payload: { encryptedVault: string; vaultVersion: number; vaultSalt: string }): Promise<Result>;
+  updateVault(payload: { encryptedVault: string; vaultVersion: number }): Promise<Result>;
+  deleteVault(): Promise<Result>;
+  isConnected(): Promise<boolean>;
+}
+```
 
-\- Key management in memory
+This works because the vault-sync contract — an `encryptedVault` blob plus `vaultVersion` for optimistic concurrency — was already storage-agnostic before this design: "store a blob, return a blob, compare a version number" maps cleanly onto a local server, Google Drive, or Dropbox.
 
+### LocalProvider
 
+Talks to the Local Sync Server over `http://localhost:PORT`, authenticated with the pairing token issued at install time.
 
-The Crypto Engine is the only module responsible for handling encryption keys.
+### GoogleDriveProvider
 
+OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. Because of this, a version mismatch on write is handled by writing a **conflict copy** rather than silently overwriting — see [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
 
+### DropboxProvider
 
-\---
+Same shape via Dropbox's file API. Dropbox's upload endpoint supports a true atomic compare-and-swap (`mode: update` + `rev`), so conflicts are rejected at write time rather than requiring a conflict-copy fallback.
 
-
-
-\## Password Capture
-
-
-
-Responsibilities:
-
-
-
-\- Detect login forms
-
-\- Detect registration forms
-
-\- Detect password updates
-
-\- Prompt users to save credentials
-
-\- Detect duplicate credentials
-
-
-
-\---
-
-
-
-\## Autofill Engine
-
-
+## Password Capture
 
 Responsibilities:
 
+- Detect login forms
+- Detect registration forms
+- Detect password updates
+- Prompt users to save credentials
+- Detect duplicate credentials
 
+## Autofill Engine
 
-\- Detect supported login forms
+Responsibilities:
 
-\- Display credential selection dropdown
-
-\- Fill usernames
-
-\- Fill passwords
-
-\- Coordinate with Auto Login
-
-
+- Detect supported login forms
+- Display credential selection dropdown
+- Fill usernames
+- Fill passwords
+- Coordinate with Auto Login
 
 The Autofill Engine never stores credentials itself.
 
-
-
-\---
-
-
-
-\## Auto Login
-
-
+## Auto Login
 
 Responsibilities:
 
+- Submit login forms after autofill
+- Respect user preferences
+- Remain disabled unless explicitly enabled
 
-
-\- Submit login forms after autofill
-
-\- Respect user preferences
-
-\- Remain disabled unless explicitly enabled
-
-
-
-\---
-
-
-
-\## Password Generator
-
-
+## Password Generator
 
 Responsibilities:
 
+- Generate secure passwords
+- Respect user-selected options
+- Provide passwords to the vault UI and the standalone website password generator
 
-
-\- Generate secure passwords
-
-\- Respect user-selected options
-
-\- Provide passwords to registration and password update workflows
-
-
-
-\---
-
-
-
-\## Vault Search
-
-
+## Vault Search
 
 Responsibilities:
 
-
-
-\- Search website names
-
-\- Search domains
-
-\- Search usernames
-
-\- Search account labels
-
-
+- Search website names
+- Search domains
+- Search usernames
+- Search account labels
 
 Search operates entirely on the local decrypted vault while it is unlocked.
 
-
-
-\---
-
-
-
-\## Local Vault Storage
-
-
+## Local Cache
 
 Responsibilities:
 
+- Store encrypted vault locally for fast loading and offline access
+- Never persist decrypted credentials
+- Act as a cache in front of whichever Storage Provider is active — not itself a Storage Provider
 
+Only encrypted vault data is written to local storage. This is distinct from the **Local** Storage Provider, which is a separate self-run server; the Local Cache exists regardless of which provider is active.
 
-\- Store encrypted vault locally
+## Export / Import
 
-\- Support offline access
+Responsibilities:
 
-\- Provide fast vault loading
+- Produce an encrypted `.clyro` file containing the full vault
+- Restore a vault from a `.clyro` file
+- Serve as the only recovery path when there is no account to reset
+- Serve as the mechanism for moving a vault between storage providers
 
-\- Never persist decrypted credentials
+Both operations work on the already-encrypted vault blob; the file itself is never plaintext.
 
+## Bridge Handler
 
+Responsibilities:
 
-Only encrypted vault data is written to local storage.
+- Listen for `chrome.runtime.onMessageExternal` from the Clyro website only (enforced by `externally_connectable`)
+- Respond to `GET_STATUS` with `{ installed, provider, locked }`
+- Handle `OPEN_VAULT` by calling `chrome.tabs.create` to open the extension's own vault tab
+
+See [Extension ↔ Website Bridge](#extension--website-bridge) for the full contract and its constraints.
 
 ---
 
+# Local Sync Server Architecture
 
-
-\# Backend Architecture
-
-
-
-The backend is responsible for authentication, synchronization, account management, and coordination between trusted client devices.
-
-
-
-The backend is intentionally designed to remain unaware of the contents of a user's vault.
-
-
-
-All sensitive vault data remains encrypted at all times.
-
-
+The Local Sync Server is a trimmed, single-purpose repackaging of what was previously a shared cloud backend. It is not a Clyro-run service — each user runs their own instance on their own machine.
 
 ```
-
-&#x20;                   +---------------------------+
-
-&#x20;                   |      Fastify Server       |
-
-&#x20;                   +---------------------------+
-
-&#x20;                              |
-
-&#x20;    ---------------------------------------------------------
-
-&#x20;    |             |             |            |               |
-
-&#x20;    ▼             ▼             ▼            ▼               ▼
-
-&#x20;Authentication  User API   Vault Sync   Device API   Notification API
-
-&#x20;    |             |             |            |               |
-
-&#x20;    ---------------------------------------------------------
-
-&#x20;                              |
-
-&#x20;                              ▼
-
-&#x20;                       PostgreSQL Database
-
+        +----------------------------+
+        |   Local Sync Server        |
+        |   (Fastify, localhost)     |
+        +----------------------------+
+                     |
+        pairing-token auth + Origin allowlist
+                     |
+                     v
+        +----------------------------+
+        |   Vault route (opaque blob) |
+        +----------------------------+
+                     |
+                     v
+        +----------------------------+
+        |   SQLite (clyro.db)         |
+        |   single vault table        |
+        +----------------------------+
 ```
 
+## Responsibilities
 
+- Accept and return an opaque encrypted vault blob plus its version number
+- Enforce optimistic concurrency (reject stale-version writes)
+- Authenticate callers via a pairing token issued at install time
+- Restrict accepted request Origins to an allowlist
 
-\---
+## What it does not do
 
+There is no Clyro account, so the server does not perform:
 
+- User registration or login
+- Email or SMS verification
+- Trusted device management
+- Session management
+- Any form of user identity
 
-\# Backend Responsibilities
+## Storage
 
+- **Bundled SQLite only.** The app creates and initializes `clyro.db` on first launch. No configuration wizard, no user-visible SQL, no choice of database engine.
+- **No ORM.** Prisma is dropped in favor of talking to SQLite directly — one table and one engine make an ORM pure overhead, and its removal is what makes single-binary packaging realistic.
+- **Schema is essentially one table**: the encrypted vault blob, its version number, and the immutable `vaultSalt`. See `docs/DATABASE.md`.
 
+## Authentication and network exposure
 
-The backend performs the following responsibilities:
+`localhost` is not a trust boundary against other software on the same machine, and is no boundary at all if the binary is later deployed somewhere reachable from more than one machine (a home server or VPS, for DIY multi-device sync). Because of this, authentication is required, not optional:
 
+- The server issues a pairing token at install time.
+- The extension stores the token and sends it with every request.
+- The server rejects any request without a valid token, and enforces an Origin allowlist on top of that.
 
+## Packaging and deployment
 
-\- User registration
-
-\- Authentication
-
-\- Email verification
-
-\- Phone verification
-
-\- Trusted device management
-
-\- Synchronization
-
-\- Secure storage of encrypted vault data
-
-\- Metadata management
-
-\- Security event logging
-
-
-
-The backend \*\*never performs encryption or decryption of user vaults\*\*.
-
-
-
-\---
-
-
-
-\# Backend Modules
-
-
-
-\## Authentication Service
-
-
-
-Responsibilities:
-
-
-
-\- Account registration
-
-\- Login verification
-
-\- Session validation
-
-\- Access token generation
-
-\- Refresh token management
-
-
-
-This service authenticates users but never learns their master password.
-
-
-
-\---
-
-
-
-\## User Service
-
-
-
-Responsibilities:
-
-
-
-\- User profile management
-
-\- Account settings
-
-\- Email updates
-
-\- Phone number updates
-
-
-
-Only account-related metadata is stored.
-
-
-
-\---
-
-
-
-\## Vault Synchronization Service
-
-
-
-Responsibilities:
-
-
-
-\- Receive encrypted vault updates
-
-\- Store encrypted vault data
-
-\- Return encrypted vault data to trusted devices
-
-\- Coordinate synchronization
-
-
-
-The service treats vault data as an opaque encrypted object.
-
-
-
-\---
-
-
-
-\## Trusted Device Service
-
-
-
-Responsibilities:
-
-
-
-\- Register trusted devices
-
-\- Revoke trusted devices
-
-\- Validate trusted devices
-
-\- Track device metadata
-
-
-
-Each trusted device is associated with a user account.
-
-
-
-\---
-
-
-
-\## Verification Service
-
-
-
-Responsibilities:
-
-
-
-\- Email verification
-
-\- SMS verification
-
-\- Verification token management
-
-
-
-Verification must occur before account activation.
-
-
-
-\---
-
-
-
-\## Notification Service
-
-
-
-Responsibilities:
-
-
-
-\- Security notifications
-
-\- New device alerts
-
-\- Email change notifications
-
-\- Phone number change notifications
-
-
-
-Notifications must never include plaintext credential information.
-
-
-
-\---
-
-
-
-\# Database Interaction
-
-
-
-The backend communicates exclusively with PostgreSQL.
-
-
-
-The backend stores:
-
-
-
-\- User accounts
-
-\- Verification records
-
-\- Trusted devices
-
-\- Encrypted vault blobs
-
-\- Synchronization metadata
-
-\- Audit and security logs
-
-
-
-The backend never stores:
-
-
-
-\- Master passwords
-
-\- Encryption keys
-
-\- Plaintext credentials
-
-\- Decrypted vault contents
-
-
-
-\---
-
-
-
-\# Backend Design Principles
-
-
-
-The backend follows these principles:
-
-
-
-\## Stateless APIs
-
-
-
-API endpoints should remain stateless wherever practical.
-
-
-
-Persistent state is stored in PostgreSQL.
-
-
-
-\---
-
-
-
-\## Minimal Trust
-
-
-
-The backend should assume as little trust as possible.
-
-
-
-Sensitive cryptographic operations always occur on the client.
-
-
-
-\---
-
-
-
-\## Modular Services
-
-
-
-Business logic should be separated into clearly defined services.
-
-
-
-This simplifies testing and future expansion.
-
-
-
-\---
-
-
-
-\## Future Scalability
-
-
-
-The architecture should support:
-
-
-
-\- Horizontal scaling
-
-\- Multiple API instances
-
-\- Future microservice extraction (if ever required)
-
-
-
-Version 1.0 will be implemented as a \*\*modular monolith\*\* to reduce operational complexity while preserving clean service boundaries.
+- Packaged as a small installer, Windows-first, matching the product's PC-focused audience.
+- Runs as an auto-starting background process (system tray style) — the user never manually starts or restarts it after install.
+- Running the same binary on a home server or VPS instead of pure `localhost` is a supported, documented deployment of the identical server, not a second code path. The pairing token is what makes that safe.
 
 ---
 
-
-
-\# Security \& Encryption Architecture
-
-
+# Security & Encryption Architecture
 
 Security is the foundation of Clyro's architecture.
 
+Every component is designed around a true zero-knowledge model where only the extension can decrypt vault data. No storage provider — Local Sync Server, Google Drive, or Dropbox — ever has access to plaintext credentials, encryption keys, or the user's master password.
 
-
-Every component is designed around a true zero-knowledge model where only the client can decrypt vault data.
-
-
-
-The backend never has access to plaintext credentials, encryption keys, or the user's master password.
-
-
-
-\---
-
-
-
-\# Security Model
-
-
+# Security Model
 
 The security model is based on the following principles:
 
+- Client-side encryption, entirely inside the extension
+- End-to-end encrypted vault synchronization to whichever storage provider is active
+- Zero-knowledge storage: every provider treats the vault as an opaque blob
+- Strong password-based key derivation (Argon2id)
+- Secure random generation
+- Encryption keys remain in memory only while the vault is unlocked
 
+# Master Password Lifecycle
 
-\- Client-side encryption
-
-\- End-to-end encrypted vault synchronization
-
-\- Zero-knowledge backend
-
-\- Strong password-based key derivation
-
-\- Secure random generation
-
-\- Encryption keys remain in memory only while the vault is unlocked
-
-
-
-\---
-
-
-
-\# Master Password Lifecycle
-
-
-
-The master password is created during account registration.
-
-
-
-It is never stored by the backend.
-
-
+The master password is created when the vault is first created — there is no account to register for. It is never stored anywhere, by the extension or by any storage provider.
 
 The master password is used only for:
 
-
-
-\- Vault unlock
-
-\- Encryption key derivation
-
-
+- Vault unlock
+- Encryption key derivation
 
 The master password itself is never used directly as an encryption key.
 
+# Key Derivation
 
-
-\---
-
-
-
-\# Key Derivation
-
-
-
-Clyro uses \*\*Argon2id\*\* to derive a cryptographic key from the user's master password.
-
-
+Clyro uses **Argon2id** to derive a cryptographic key from the user's master password.
 
 The derivation process uses:
 
-
-
-\- User master password
-
-\- Unique cryptographic salt
-
-\- Memory-hard parameters
-
-
+- User master password
+- A unique, client-generated `vaultSalt` (immutable per vault, enabling consistent key derivation across devices)
+- Memory-hard parameters (MODERATE preset)
 
 The derived key exists only in memory while the vault is unlocked.
 
+# Vault Encryption
 
-
-\---
-
-
-
-\# Vault Encryption
-
-
-
-All credentials stored in the vault are encrypted before leaving the client.
-
-
+All credentials stored in the vault are encrypted before leaving the extension.
 
 Encryption occurs:
 
+- Before local caching
+- Before being sent to the active storage provider
 
+No storage provider ever receives anything but encrypted vault data.
 
-\- Before synchronization
-
-\- Before local storage
-
-\- Before transmission to the backend
-
-
-
-The backend receives only encrypted vault data.
-
-
-
-\---
-
-
-
-\# Vault Decryption
-
-
+# Vault Decryption
 
 Vault decryption occurs only after:
 
+1. The extension has fetched (or already cached) the encrypted vault
+2. The user supplies the correct master password
+3. The client-side key derivation and decryption succeed
 
+Only the extension performs decryption — no storage provider is capable of it.
 
-1\. User authentication
+# Local Storage
 
-2\. Successful vault unlock
+Requirements, unchanged regardless of which Storage Provider is active:
 
-3\. Correct master password
+- Only encrypted vault data is stored on disk, by the extension's local cache or by the Local Sync Server's SQLite database.
+- Plaintext credentials are never written to disk.
+- Encryption keys are never persisted.
+- Decrypted vault contents exist only in memory while unlocked.
 
+# Secure Communication
 
+- Local Sync Server traffic runs over `http://localhost` (or a user-operated remote deployment secured by the pairing token and Origin allowlist).
+- Google Drive and Dropbox traffic runs over HTTPS via their respective SDKs.
+- Sensitive information is never transmitted through insecure channels.
 
-Only the client performs decryption.
-
-
-
-\---
-
-
-
-\# Local Storage
-
-
-
-Trusted devices maintain an encrypted local copy of the vault.
-
-
-
-Requirements:
-
-
-
-\- Only encrypted vault data is stored.
-
-\- Plaintext credentials are never written to disk.
-
-\- Encryption keys are never persisted.
-
-\- Decrypted vault contents exist only in memory while unlocked.
-
-
-
-\---
-
-
-
-\# Secure Communication
-
-
-
-All communication between clients and backend services must use HTTPS with modern TLS.
-
-
-
-Sensitive information should never be transmitted through insecure channels.
-
-
-
-\---
-
-
-
-\# Authentication vs Encryption
-
-
-
-Authentication and encryption are intentionally separated.
-
-
-
-Authentication verifies user identity.
-
-
-
-Encryption protects vault contents.
-
-
-
-Compromising one should not automatically compromise the other.
-
-
-
-\---
-
-
-
-\# Session Security
-
-
+# Session Security
 
 While the browser remains open:
 
-
-
-\- Vault remains unlocked.
-
-\- Encryption keys remain in protected memory.
-
-
+- Vault remains unlocked once unlocked.
+- Encryption keys remain in protected memory.
 
 When the browser closes:
 
+- Vault locks automatically.
+- Encryption keys are destroyed from memory.
+- Users must unlock the vault again during the next browser session.
 
+# Vault Recovery
 
-\- Vault locks automatically.
+Because there is no Clyro account, there is no password reset flow. Recovery relies entirely on:
 
-\- Encryption keys are destroyed from memory.
+- **Encrypted export** (`.clyro` file) taken proactively by the user — the only backup mechanism.
+- The vault surviving on whichever storage provider is active (a lost local `clyro.db` with no export is a lost vault).
 
-\- Users must unlock the vault again during the next browser session.
+Forgotten master passwords cannot recover an existing encrypted vault under any circumstances — this is an inherent property of the zero-knowledge model, not a missing feature.
 
+# Security Responsibilities
 
-
-\---
-
-
-
-\# Password Recovery
-
-
-
-Because Clyro follows a true zero-knowledge architecture:
-
-
-
-\- Forgotten master passwords cannot recover encrypted vaults.
-
-\- Backend administrators cannot decrypt vaults.
-
-\- Support staff cannot recover vault contents.
-
-
-
-Users may reset their account, but doing so creates a new empty encrypted vault.
-
-
-
-\---
-
-
-
-\# Security Responsibilities
-
-
-
-\## Client
-
-
+## Extension
 
 Responsible for:
 
+- Key derivation
+- Encryption
+- Decryption
+- Password generation
+- Vault unlock
+- Vault lock
+- Export / import
 
-
-\- Key derivation
-
-\- Encryption
-
-\- Decryption
-
-\- Password generation
-
-\- Vault unlock
-
-\- Vault lock
-
-
-
-\---
-
-
-
-\## Backend
-
-
+## Storage Providers
 
 Responsible for:
 
+- Accepting and returning opaque encrypted vault blobs
+- Version-based conflict detection
+- (Local Sync Server only) authenticating callers via pairing token
 
+No storage provider performs cryptographic operations on vault contents.
 
-\- Authentication
+# Security Philosophy
 
-\- Synchronization
-
-\- Verification
-
-\- Secure storage of encrypted vault data
-
-\- Trusted device management
-
-
-
-The backend never performs cryptographic operations on user vault contents.
-
-
-
-\---
-
-
-
-\# Security Philosophy
-
-
-
-Whenever security and convenience conflict, Clyro prioritizes protecting user data.
-
-
-
-Features that weaken the zero-knowledge model are considered out of scope unless the project's security architecture is intentionally redesigned.
+Whenever security and convenience conflict, Clyro prioritizes protecting user data. Features that weaken the zero-knowledge model, or that would require plaintext vault data to leave the extension, are out of scope unless the project's security architecture is intentionally redesigned. See `docs/SECURITY.md` for the full threat model.
 
 ---
 
+# Vault Unlock Lifecycle
 
+The vault does not sit behind a login — it sits behind a master password check performed entirely client-side.
 
-\# Authentication \& Session Lifecycle
+# Unlock Flow
 
+1. User opens the extension (popup or full-page vault tab).
+2. If no storage provider is configured yet, the first-run storage picker runs instead (see [Storage Picker](#storage-picker-first-run)).
+3. The extension fetches the encrypted vault from the active storage provider (or uses its local cache if offline).
+4. User enters the master password.
+5. The extension derives the encryption key using Argon2id and the vault's `vaultSalt`.
+6. The encrypted vault is decrypted locally.
+7. The vault becomes available to the user.
 
+At no point does any storage provider receive:
 
-Authentication and vault access are intentionally separated.
+- The master password
+- The encryption key
+- Decrypted vault contents
 
-
-
-Authentication confirms the user's identity.
-
-
-
-The master password unlocks the encrypted vault.
-
-
-
-This separation ensures the backend never learns the user's encryption key or vault contents.
-
-
-
-\---
-
-
-
-\# Login Flow
-
-
-
-The authentication flow is as follows:
-
-
-
-1\. User opens the Clyro extension.
-
-2\. User enters their registered email address or phone number.
-
-3\. User authenticates with the backend.
-
-4\. Backend validates the account.
-
-5\. Backend returns a valid authenticated session.
-
-6\. User enters the master password.
-
-7\. The client derives the encryption key using Argon2id.
-
-8\. The encrypted vault is decrypted locally.
-
-9\. The vault becomes available to the user.
-
-
-
-At no point does the backend receive:
-
-
-
-\- The master password
-
-\- The encryption key
-
-\- Decrypted vault contents
-
-
-
-\---
-
-
-
-\# Browser Session
-
-
+# Browser Session
 
 Once the vault has been unlocked:
 
+- The vault remains unlocked while the browser is running.
+- Encryption keys remain only in protected memory.
+- The user may access vault features without repeatedly entering the master password.
 
+Examples include autofill, password generation, vault search, and password capture.
 
-\- The vault remains unlocked while the browser is running.
-
-\- Encryption keys remain only in protected memory.
-
-\- The user may access vault features without repeatedly entering the master password.
-
-
-
-Examples include:
-
-
-
-\- Autofill
-
-\- Password generation
-
-\- Vault search
-
-\- Password capture
-
-
-
-\---
-
-
-
-\# Browser Shutdown
-
-
+# Browser Shutdown
 
 When the browser closes:
 
+- The vault immediately locks.
+- Encryption keys are removed from memory.
+- Decrypted vault data is discarded.
 
+The next browser launch requires the user to unlock the vault again.
 
-\- The vault immediately locks.
+# Offline Operation
 
-\- Encryption keys are removed from memory.
+The extension continues functioning while offline, using its local encrypted cache. Users may unlock the vault, search credentials, view credentials, autofill credentials, and generate passwords. Changes made while offline remain encrypted locally and sync to the active storage provider automatically once connectivity returns.
 
-\- Decrypted vault data is discarded.
+# Session Timeout
 
-\- Active vault sessions terminate.
+Version 1.0 follows a browser-based session model:
 
-
-
-The next browser launch requires the user to authenticate and unlock the vault again.
-
-
-
-\---
-
-
-
-\# Trusted Device Lifecycle
-
-
-
-When a new device is authenticated:
-
-
-
-1\. Device authentication succeeds.
-
-2\. Device is registered as trusted.
-
-3\. The encrypted vault is synchronized.
-
-4\. The device stores only the encrypted vault locally.
-
-
-
-Trusted devices may later be revoked.
-
-
-
-Revoked devices:
-
-
-
-\- Lose synchronization access.
-
-\- Must authenticate again before reconnecting.
-
-
-
-\---
-
-
-
-\# Offline Operation
-
-
-
-Trusted devices continue functioning while offline.
-
-
-
-Users may:
-
-
-
-\- Unlock the vault
-
-\- Search credentials
-
-\- View credentials
-
-\- Autofill credentials
-
-\- Generate passwords
-
-
-
-Changes made while offline remain encrypted locally.
-
-
-
-Synchronization resumes automatically when connectivity returns.
-
-
-
-\---
-
-
-
-\# Session Timeout
-
-
-
-Version 1.0 follows a browser-based session model.
-
-
-
-Session policy:
-
-
-
-\- Vault remains unlocked while the browser is open.
-
-\- Closing the browser immediately locks the vault.
-
-\- Users authenticate again during the next browser session.
-
-
+- Vault remains unlocked while the browser is open.
+- Closing the browser immediately locks the vault.
+- Users unlock again during the next browser session.
 
 Future versions may introduce configurable inactivity timeouts.
 
-
-
-\---
-
-
-
-\# Authentication Philosophy
-
-
-
-Authentication proves \*\*who the user is\*\*.
-
-
-
-The master password proves \*\*that the user can decrypt the vault\*\*.
-
-
-
-These responsibilities remain intentionally independent to preserve the zero-knowledge architecture.
-
 ---
 
+# Vault Synchronization Architecture
 
+Clyro uses a **local-first synchronization model**: the extension owns the authoritative in-memory vault and pushes/pulls encrypted blobs to whichever single storage provider the user has chosen. There is no Clyro-run coordination service.
 
-\# Vault Synchronization Architecture
+# Synchronization Flow
 
+1. The vault is modified inside the extension.
+2. The updated vault is encrypted locally.
+3. The encrypted vault is sent to the active Storage Provider (`updateVault`), including the current `vaultVersion`.
+4. The Storage Provider stores the encrypted vault and increments its version (or, for Google Drive on a version mismatch, writes a conflict copy — see [GoogleDriveProvider](#googledriveprovider)).
+5. Other devices connected to the same Storage Provider detect a newer vault version on their next `getVault()` call.
+6. The encrypted vault is fetched and decrypted locally on that device.
 
+At no point does the Storage Provider access decrypted vault data.
 
-Clyro uses a cloud-first synchronization model.
-
-
-
-The backend coordinates synchronization between trusted devices while remaining unable to decrypt vault contents.
-
-
-
-Only encrypted vault data is transmitted and stored.
-
-
-
-\---
-
-
-
-\# Synchronization Flow
-
-
-
-The synchronization process follows these steps:
-
-
-
-1\. A trusted device modifies the local vault.
-
-2\. The updated vault is encrypted locally.
-
-3\. The encrypted vault is uploaded to the backend.
-
-4\. The backend stores the encrypted vault.
-
-5\. Other trusted devices detect that a newer vault version is available.
-
-6\. The encrypted vault is downloaded.
-
-7\. The client decrypts the vault locally.
-
-8\. Local data is updated.
-
-
-
-At no point does the backend access decrypted vault data.
-
-
-
-\---
-
-
-
-\# Synchronization Triggers
-
-
+# Synchronization Triggers
 
 Synchronization occurs automatically when:
 
-
-
-\- A new credential is added.
-
-\- An existing credential is updated.
-
-\- A credential is deleted.
-
-\- The vault is unlocked after being offline.
-
-\- A trusted device comes back online.
-
-
+- A new credential is added, updated, or deleted.
+- The vault is unlocked after being offline.
+- The extension detects connectivity has returned.
 
 Manual synchronization may also be available through the extension interface.
 
+# Conflict Resolution
 
+Version 1.0 uses **optimistic concurrency via `vaultVersion`**:
 
-\---
+- A write includes the version it was based on.
+- If the stored version has since moved (another device wrote first), the write is rejected.
+- **Local Sync Server and Dropbox**: the provider enforces this atomically (SQLite transaction / Dropbox `rev`), and the extension re-fetches and retries.
+- **Google Drive**: no atomic precondition exists, so a version mismatch on write produces a **conflict copy** rather than silently overwriting or losing data. The user resolves the conflict by choosing which copy to keep.
 
+This approach prioritizes not losing data over automatic merging. Future versions may introduce field-level merge or conflict history.
 
+# Offline Synchronization
 
-\# Conflict Resolution
+The extension remains fully functional while offline, via its local encrypted cache. Users can view, add, edit, and delete credentials, and generate and autofill passwords. All changes remain encrypted locally until synchronization to the active Storage Provider becomes possible.
 
+# Synchronization Security
 
+- Only encrypted vault data is ever transmitted to a Storage Provider.
+- Local Sync Server traffic is authenticated with a pairing token and restricted by an Origin allowlist.
+- Google Drive and Dropbox traffic is authenticated via their own OAuth flows, scoped to an app-specific folder.
+- Encryption and decryption always occur inside the extension, never at a Storage Provider.
 
-Version 1.0 uses the \*\*Last Change Wins (LCW)\*\* strategy.
+# Version Metadata
 
+Each vault write includes:
 
-
-If two trusted devices modify the same credential before synchronization:
-
-
-
-\- The credential with the most recent modification timestamp is retained.
-
-\- Older versions are overwritten.
-
-
-
-This approach prioritizes simplicity and predictability.
-
-
-
-Future versions may introduce optional conflict history or versioning.
-
-
-
-\---
-
-
-
-\# Offline Synchronization
-
-
-
-Trusted devices remain fully functional while offline.
-
-
-
-Users can:
-
-
-
-\- View credentials
-
-\- Add credentials
-
-\- Edit credentials
-
-\- Delete credentials
-
-\- Generate passwords
-
-\- Autofill credentials
-
-
-
-All changes remain encrypted on the local device until synchronization becomes possible.
-
-
-
-\---
-
-
-
-\# Synchronization Security
-
-
-
-Synchronization must follow these rules:
-
-
-
-\- Only encrypted vault data is transmitted.
-
-\- HTTPS with modern TLS is required.
-
-\- Authentication is required before synchronization.
-
-\- Only trusted devices may synchronize vault data.
-
-\- Encryption and decryption always occur on the client.
-
-
-
-\---
-
-
-
-\# Version Metadata
-
-
-
-Each vault synchronization includes metadata such as:
-
-
-
-\- Vault version
-
-\- Last modification timestamp
-
-\- Device identifier
-
-\- Synchronization timestamp
-
-
+- `vaultVersion`
+- `vaultSalt` (set once at creation, immutable thereafter)
 
 This metadata is used solely for synchronization coordination and never includes plaintext credential information.
 
+# Synchronization Philosophy
 
-
-\---
-
-
-
-\# Synchronization Philosophy
-
-
-
-Synchronization should be reliable, predictable, and transparent.
-
-
-
-Users should rarely need to think about synchronization during normal use.
-
-
-
-The system should automatically recover from temporary network failures without risking data integrity or compromising security.
+Synchronization should be reliable, predictable, and transparent. Users should rarely need to think about which storage provider is active or how sync works during normal use. The system should automatically recover from temporary network failures without risking data integrity or compromising security, and should never silently discard a write it cannot safely apply.
 
 ---
 
+# Extension ↔ Website Bridge
 
+The live, publicly-hosted website cannot reach a visitor's local Sync Server or cloud storage directly — this is a deliberate browser security boundary (Private Network Access protections specifically block public HTTPS pages from probing local/private network addresses), not a missing feature.
 
-\# Recommended Project Structure
+**The vault UI lives in the extension, so the bridge carries status only — never credentials.** This is a hard architectural rule, recorded as a trust boundary in `docs/SECURITY.md`.
 
+## Mechanism
 
+1. The extension manifest declares `externally_connectable`, scoped strictly to Clyro's own live website domain plus `http://localhost:3000/*` for development. No other site can message the extension.
+2. This requires a **stable extension ID** — a committed `key` in `apps/extension/manifest.json` (or a published Web Store listing).
+3. The website's Dashboard page is a **launcher**. It sends exactly two message types:
+   - `GET_STATUS` → extension responds `{ installed: true, provider: 'local' | 'google-drive' | 'dropbox' | null, locked: boolean }`
+   - `OPEN_VAULT` → extension calls `chrome.tabs.create` to open its own vault tab
+4. `OPEN_VAULT` has to work this way round because **a web page cannot navigate to a `chrome-extension://` URL** — Chrome blocks it unless the page is declared in `web_accessible_resources`, which Clyro deliberately does not do for the vault tab.
+5. If the extension isn't installed or doesn't respond, the Dashboard shows an install prompt — never an error, and never stale or fake data.
+6. No bridge message may ever carry a credential, master password, vault key, or decrypted blob. This is enforced by the message union type in `packages/shared-types`, which has no field capable of carrying such a payload.
 
-The repository should be organized to keep responsibilities clearly separated and make future expansion straightforward.
+This keeps sensitive vault operations inside the extension, with the website acting only as a doorway to it.
 
+---
 
+# Recommended Project Structure
+
+The repository is organized to keep responsibilities clearly separated.
 
 ```
-
 Clyro/
-
-│
-
-├── docs/
-
-│   ├── README.md
-
-│   ├── PROJECT\_CONTEXT.md
-
-│   ├── AI\_INSTRUCTIONS.md
-
-│   ├── PRD.md
-
-│   ├── ARCHITECTURE.md
-
-│   ├── DATABASE.md
-
-│   ├── API.md
-
-│   └── CONTRIBUTING.md
-
-│
-
-├── extension/
-
-│   ├── src/
-
-│   │   ├── auth/
-
-│   │   ├── autofill/
-
-│   │   ├── capture/
-
-│   │   ├── crypto/
-
-│   │   ├── generator/
-
-│   │   ├── search/
-
-│   │   ├── storage/
-
-│   │   ├── sync/
-
-│   │   ├── ui/
-
-│   │   └── utils/
-
-│   │
-
-│   ├── public/
-
-│   ├── assets/
-
-│   └── tests/
-
-│
-
-├── backend/
-
-│   ├── src/
-
-│   │   ├── auth/
-
-│   │   ├── users/
-
-│   │   ├── vault/
-
-│   │   ├── devices/
-
-│   │   ├── notifications/
-
-│   │   ├── database/
-
-│   │   ├── middleware/
-
-│   │   ├── routes/
-
-│   │   └── utils/
-
-│   │
-
-│   └── tests/
-
-│
-
-├── website/
-
-│   ├── src/
-
-│   ├── public/
-
-│   └── assets/
-
-│
-
-└── shared/
-
-&#x20;   ├── types/
-
-&#x20;   ├── constants/
-
-&#x20;   └── validation/
-
+|-- docs/
+|   |-- AI_INSTRUCTIONS.md
+|   |-- PRD.md
+|   |-- ARCHITECTURE.md
+|   |-- DATABASE.md
+|   `-- API.md
+|
+|-- apps/
+|   |-- extension/            # Chromium extension (Vite + CRXJS)
+|   |   `-- src/
+|   |       |-- background/   # vaultManager, sync providers, bridge handler
+|   |       |-- crypto/       # (re-exports packages/crypto)
+|   |       |-- popup/        # slim quick-access UI
+|   |       |-- vault/        # full-page vault tab
+|   |       |-- options/      # Storage & Sync settings
+|   |       |-- content/      # autofill content scripts
+|   |       `-- storage/      # local encrypted cache
+|   |
+|   |-- backend/              # Local Sync Server (Fastify + SQLite, no Prisma)
+|   |   `-- src/
+|   |       |-- routes/       # vault.ts, pairing.ts
+|   |       |-- services/     # vaultValidation.ts
+|   |       `-- db/           # SQLite setup
+|   |
+|   `-- website/              # Next.js marketing site + launcher
+|       `-- src/
+|
+|-- packages/
+|   |-- crypto/               # Argon2id + XChaCha20-Poly1305 (unchanged by this design)
+|   |-- shared-types/         # SyncProvider, bridge message types
+|   `-- config/               # shared eslint/prettier/tsconfig
 ```
 
+# Directory Responsibilities
 
+## docs/
 
-\---
+Contains all project documentation. Documentation is considered part of the product and should remain synchronized with implementation.
 
+## apps/extension/
 
+Contains the Chromium browser extension — the product itself. All client-side cryptographic operations and the vault UI live here.
 
-\# Directory Responsibilities
+## apps/backend/
 
+Contains the Local Sync Server: a single-purpose, self-run vault store. It never decrypts vault data and holds no user accounts.
 
+## apps/website/
 
-\## docs/
+Contains the marketing site and the extension launcher. Vault operations never happen here.
 
+## packages/
 
-
-Contains all project documentation.
-
-
-
-Documentation is considered part of the product and should remain synchronized with implementation.
-
-
-
-\---
-
-
-
-\## extension/
-
-
-
-Contains the Chromium browser extension.
-
-
-
-All client-side cryptographic operations occur here.
-
-
-
-\---
-
-
-
-\## backend/
-
-
-
-Contains the server responsible for authentication, synchronization, and account management.
-
-
-
-The backend never decrypts vault data.
-
-
-
-\---
-
-
-
-\## website/
-
-
-
-Contains the companion website used for account management, documentation, and extension downloads.
-
-
-
-Vault operations remain inside the browser extension.
-
-
-
-\---
-
-
-
-\## shared/
-
-
-
-Contains code that may be shared between multiple applications, such as:
-
-
-
-\- Shared types
-
-\- Validation schemas
-
-\- Common constants
-
-
-
-Business logic should not be duplicated unnecessarily.
+Contains code shared between multiple apps: crypto primitives, shared types, and shared tooling config.
 
 ---
 
-
-
-\# Technology Stack
-
-
-
-The following technologies have been selected for Version 1.0 of Clyro.
-
-
+# Technology Stack
 
 | Component | Technology |
-
 |-----------|------------|
-
-| Browser Extension | Chromium Extension (Manifest V3) |
-
+| Browser Extension | Chromium Extension (Manifest V3), Vite + CRXJS |
 | Frontend Language | TypeScript |
-
-| Backend Runtime | Node.js |
-
-| Backend Framework | Fastify |
-
-| Database | PostgreSQL |
-
-| ORM | Prisma |
-
-| Authentication | JWT + Refresh Tokens |
-
-| Password Hashing | Argon2id |
-
-| Vault Encryption | AES-256-GCM |
-
-| Transport Security | HTTPS (TLS) |
-
-| Cloud Hosting | TBD |
-
-| Website | React |
-
-| Package Manager | pnpm |
-
+| Local Sync Server Runtime | Node.js |
+| Local Sync Server Framework | Fastify |
+| Local Sync Server Storage | SQLite (bundled, no ORM) |
+| Cloud Storage Providers | Google Drive (`chrome.identity`), Dropbox |
+| Local Sync Server Auth | Pairing token + Origin allowlist |
+| Key Derivation | Argon2id |
+| Vault Encryption | XChaCha20-Poly1305 |
+| Transport Security | HTTPS (TLS) for cloud providers; localhost / pairing-token-secured HTTP for the Local Sync Server |
+| Website | Next.js |
+| Package Manager | pnpm (workspaces) |
 | Version Control | Git + GitHub |
 
-
-
-\---
-
-
-
-\# Technology Selection Principles
-
-
+# Technology Selection Principles
 
 Technology choices should follow these principles:
 
-
-
-\- Prefer mature and well-maintained technologies.
-
-\- Minimize unnecessary dependencies.
-
-\- Favor readability over clever implementations.
-
-\- Prioritize long-term maintainability.
-
-\- Keep the architecture modular.
-
-\- Replace technologies only when there is a clear technical benefit.
-
-
+- Prefer mature and well-maintained technologies.
+- Minimize unnecessary dependencies.
+- Favor readability over clever implementations.
+- Prioritize long-term maintainability.
+- Keep the architecture modular.
+- Replace technologies only when there is a clear technical benefit.
 
 Technology decisions should remain consistent across the project unless a documented architectural decision requires a change.
 
 ---
 
-
-
-\# Architecture Decision Summary
-
-
-
-The following architectural decisions define Clyro Version 1.0.
-
-
+# Architecture Decision Summary
 
 | Area | Decision |
-
 |------|----------|
-
-| Product Model | Cloud-first password manager |
-
+| Product Model | Local-first, bring-your-own-storage password manager |
+| Clyro-run backend | None for regular use |
 | Security Model | True Zero-Knowledge |
-
 | Browser Support | Chromium-based browsers only |
-
 | Future Expansion | Firefox, Safari, Mobile |
-
-| Authentication | Email or Phone Number |
-
-| Vault Unlock | Master Password |
-
+| Storage Providers | Local (self-run + SQLite), Google Drive, Dropbox — exactly one active |
+| Vault UI Location | Inside the extension (full-page tab), not the website |
+| Website Role | Marketing + status-only launcher |
+| Vault Unlock | Master Password (client-side, no account) |
 | Session Policy | Vault remains unlocked while browser is open |
-
 | Browser Close | Automatically locks the vault |
-
 | Client Encryption | Yes |
-
-| Server Decryption | Never |
-
-| Offline Support | Trusted devices only |
-
-| Synchronization | Automatic cloud synchronization |
-
-| Conflict Resolution | Last Change Wins |
-
-| Password Generator | User-configurable |
-
+| Storage Provider Decryption | Never |
+| Offline Support | Full, via local encrypted cache |
+| Synchronization | Automatic, against the single active provider |
+| Conflict Resolution | Optimistic concurrency (`vaultVersion`); conflict copy on Google Drive mismatch |
+| Recovery | Encrypted export/import (`.clyro` file) — no account, no password reset |
+| Password Generator | User-configurable, also available standalone on the website |
 | Auto Login | Optional (disabled by default) |
-
-| Backend Architecture | Modular Monolith |
-
-| Database | PostgreSQL |
-
+| Local Sync Server Storage | SQLite, no ORM |
+| Local Sync Server Auth | Pairing token + Origin allowlist |
 | Backend Framework | Fastify |
-
 | Frontend Language | TypeScript |
-
-| Companion Website | React |
-
-| Encryption Algorithm | AES-256-GCM |
-
+| Companion Website | Next.js |
+| Encryption Algorithm | XChaCha20-Poly1305 |
 | Key Derivation | Argon2id |
 
+---
 
-
-\---
-
-
-
-\# Architecture Governance
-
-
+# Architecture Governance
 
 This document serves as the technical source of truth for Clyro's implementation.
 
-
-
 If a future implementation requires a significant architectural change, the change should be documented and reviewed before development proceeds.
-
-
 
 Architecture decisions should be intentional, documented, and aligned with the project's core principles of security, privacy, simplicity, and maintainability.
 
 ---
 
-
-
-\# Conclusion
-
-
+# Conclusion
 
 This Architecture Document defines the technical foundation for Clyro Version 1.0.
 
-
-
 It translates the product vision described in the Product Requirements Document (PRD) into a practical engineering blueprint. The architecture establishes clear responsibilities for each system component, defines security boundaries, and documents the principles that guide implementation.
-
-
 
 The most important architectural commitments made by this document are:
 
+- True zero-knowledge security
+- Client-side encryption and decryption, entirely inside the extension
+- No Clyro-run backend for regular use — the user owns their storage
+- A status-only bridge between the website and the extension
+- Chromium-first browser support
+- Clear separation of responsibilities
+- Documentation-first development
 
-
-\- True zero-knowledge security
-
-\- Client-side encryption and decryption
-
-\- Cloud-first synchronization
-
-\- Chromium-first browser support
-
-\- Modular monolith backend architecture
-
-\- Clear separation of responsibilities
-
-\- Documentation-first development
-
-
-
-Future platform expansion—including Firefox, Safari, Android, and iOS—should build upon this architecture without compromising its core security model.
-
-
+Future platform expansion — including Firefox, Safari, Android, and iOS — should build upon this architecture without compromising its core security model.
 
 Any significant architectural change should be documented, reviewed, and approved before implementation to ensure consistency across the project.
 
+---
 
-
-\---
-
-
-
-\# Document Status
-
-
+# Document Status
 
 | Field | Value |
-
 |-------|-------|
-
 | Document | Architecture Document |
-
-| Version | 1.0.0 |
-
-| Status | Complete |
-
+| Version | 2.0.0 |
+| Status | Draft (Under Review) |
 | Owner | ClyroVaultSync |
-
-| Last Reviewed | July 2026 |
-
+| Last Reviewed | August 2026 |
 | Next Review | Before implementation of Version 1.1 |
 
-
-
-\---
-
-
-
-\*\*End of Document\*\*
-
-
-
-
-
+**End of Document**
