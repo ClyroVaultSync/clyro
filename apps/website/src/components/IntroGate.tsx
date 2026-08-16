@@ -27,14 +27,25 @@ type Phase = 'checking' | 'intro' | 'done';
  * reveals them, reading as one continuous animation rather than something
  * that already finished forming behind a white screen.
  */
-export default function IntroGate({ children }: { children: React.ReactNode }) {
+export default function IntroGate({
+  children,
+  disabled = false
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
   const [phase, setPhase] = useState<Phase>('checking');
   const [revealSite, setRevealSite] = useState(false);
 
   useLayoutEffect(() => {
+    if (disabled) return;
     const seen = window.sessionStorage.getItem(STORAGE_KEY) === '1';
     setPhase(seen ? 'done' : 'intro');
-  }, []);
+  }, [disabled]);
+
+  if (disabled) {
+    return <React.Fragment key="site-content">{children}</React.Fragment>;
+  }
 
   if (phase === 'checking') {
     return <div className="fixed inset-0 z-[999] bg-base" />;
@@ -51,7 +62,9 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
           }}
         />
       )}
-      {(phase === 'done' || revealSite) && children}
+      {(phase === 'done' || revealSite) && (
+        <React.Fragment key="site-content">{children}</React.Fragment>
+      )}
     </>
   );
 }

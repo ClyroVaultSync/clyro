@@ -2,13 +2,13 @@
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import SpecularButton from './SpecularButton/SpecularButton';
 import GooeyNav from './GooeyNav';
 import MetallicPaint from './MetallicPaint';
 
 const NAV_ITEMS = [
   { label: 'Home', href: '/' },
-  { label: 'Password Generator', href: '/password-generator' }
+  { label: 'Password Generator', href: '/password-generator' },
+  { label: 'Dashboard', href: '/dashboard' }
 ];
 
 export default function Header() {
@@ -26,9 +26,7 @@ export default function Header() {
         initialActiveIndex={Math.max(activeIndex, 0)}
         onNavigate={router.push}
       />
-      <SpecularButton size="sm" onClick={undefined} className="justify-self-end">
-        Continue with Google
-      </SpecularButton>
+      <div />
     </header>
   );
 }

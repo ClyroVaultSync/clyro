@@ -1,7 +1,7 @@
 import './globals.css';
 import React from 'react';
 import { Inter, IBM_Plex_Mono } from 'next/font/google';
-import IntroGate from '../components/IntroGate';
+import SiteChrome from '../components/SiteChrome';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const plexMono = IBM_Plex_Mono({
@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${plexMono.variable}`}>
       <body className="font-sans flex flex-col min-h-screen">
-        <IntroGate>{children}</IntroGate>
+        <SiteChrome>{children}</SiteChrome>
       </body>
     </html>
   );
