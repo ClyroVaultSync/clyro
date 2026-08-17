@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import localFont from 'next/font/local';
+import { Space_Grotesk } from 'next/font/google';
 import MagicBento from '../../../components/MagicBento';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { InteractiveHoverButton } from '../../../components/ui/interactive-hover-button';
@@ -31,6 +32,13 @@ const WARNING = '251, 191, 36';
 const basementGrotesque = localFont({
   src: '../../../fonts/basement-grotesque/BasementGrotesque-Black.woff2',
   variable: '--font-basement-grotesque',
+  display: 'swap'
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['500'],
+  variable: '--font-space-grotesk',
   display: 'swap'
 });
 
@@ -133,7 +141,7 @@ export default function DashboardPage() {
         ];
 
   return (
-    <div className={basementGrotesque.variable}>
+    <div className={`${basementGrotesque.variable} ${spaceGrotesk.variable}`}>
       <PageHeader
         title="Dashboard"
         subtitle="Launch your vault, or set up where it lives."
@@ -141,11 +149,14 @@ export default function DashboardPage() {
       />
 
       <div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-raised/50 px-4 py-3">
-        <span className="shrink-0 font-mono text-xs uppercase tracking-wider text-body">Preview state (mock)</span>
+        <span className={`${spaceGrotesk.className} shrink-0 text-xs uppercase tracking-wider text-body`}>
+          Preview state (mock)
+        </span>
         <Tabs
           tabs={PREVIEW_STATES.map(s => ({ id: s.id, label: s.label }))}
           activeTab={previewState}
           onChange={handlePreviewChange}
+          labelClassName={spaceGrotesk.className}
         />
       </div>
 

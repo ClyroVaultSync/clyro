@@ -14,9 +14,10 @@ export interface TabsProps {
   activeTab: string;
   onChange: (id: string) => void;
   className?: string;
+  labelClassName?: string;
 }
 
-export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className }) => {
+export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className, labelClassName }) => {
   return (
     <div className={cn('flex space-x-1 border-b border-border', className)}>
       {tabs.map((tab) => {
@@ -26,7 +27,8 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className
             key={tab.id}
             onClick={() => onChange(tab.id)}
             className={cn(
-              'relative px-4 py-3 text-sm font-mono tracking-wider uppercase transition-colors',
+              'relative px-4 py-3 text-sm tracking-wider uppercase transition-colors',
+              labelClassName ?? 'font-mono',
               isActive ? 'text-accent' : 'text-body hover:text-heading'
             )}
           >
