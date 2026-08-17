@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 /**
@@ -36,13 +36,21 @@ export default function WordsPreloader({
     return () => clearTimeout(timer);
   }, [wordIndex]);
 
+  // The exit timer must be anchored to mount — depending on `onExitStart`
+  // would restart it whenever the parent re-renders with a new inline handler,
+  // and the preloader would never finish. Holding it in a ref keeps the effect
+  // dependency-free while still calling the *current* handler, rather than
+  // closing over whichever one happened to be passed on the first render.
+  const onExitStartRef = useRef(onExitStart);
+  useEffect(() => {
+    onExitStartRef.current = onExitStart;
+  }, [onExitStart]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setExiting(true);
-      onExitStart();
+      onExitStartRef.current();
     }, EXIT_START);
-    // Runs once: the exit timer is anchored to mount, not to onExitStart
-    // identity, which would restart it on every parent render.
     return () => clearTimeout(timer);
   }, []);
 

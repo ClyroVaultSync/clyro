@@ -125,12 +125,12 @@ export function PasswordGenerator() {
     setGenId((id) => id + 1);
   }, [length, useUpper, useLower, useNumbers, useSymbols, excludeAmbiguous]);
 
+  // `regenerate` is memoized on exactly the generator settings, so depending on
+  // it is equivalent to relisting them — without a second copy of the list that
+  // can drift out of sync with the useCallback above.
   React.useEffect(() => {
     regenerate();
-    // Intentionally keyed to the generator settings rather than `regenerate`
-    // itself: the callback is recreated on every settings change, so depending
-    // on it would be equivalent but noisier.
-  }, [length, useUpper, useLower, useNumbers, useSymbols, excludeAmbiguous]);
+  }, [regenerate]);
 
   React.useEffect(() => () => clearTimeout(copyTimeout.current), []);
 

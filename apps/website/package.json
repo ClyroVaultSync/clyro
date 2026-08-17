@@ -29,6 +29,8 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
+    "eslint-config-next": "^14.2.35",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "typescript": "^5.0.0"
   }
 }

@@ -23,7 +23,13 @@ export function useAnimeScope<T extends HTMLElement | SVGElement = HTMLElement>(
   useEffect(() => {
     const scope = createScope({ root: rootRef }).add((scope) => setup(scope as Scope));
     return () => scope.revert();
-    // deps are caller-controlled; this hook intentionally doesn't re-derive them
+    // The dependency array is a pass-through parameter, which the hooks linter
+    // cannot statically verify — the standard limitation for custom hooks that
+    // forward deps. Correctness is the caller's job: list everything `setup`
+    // closes over. `setup` itself is excluded deliberately, since callers pass
+    // an inline arrow and depending on it would re-create the anime scope on
+    // every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   return rootRef;

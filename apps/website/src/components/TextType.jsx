@@ -138,10 +138,10 @@ const TextType = ({
       executeTypingAnimation();
     }
 
-    // Deps below are the animation's own state plus its configuration; the
-    // callbacks are deliberately excluded so a new inline handler per render
-    // cannot restart the animation mid-word.
     return () => clearTimeout(timeout);
+    // `getRandomSpeed` is memoized on [variableSpeed, typingSpeed], both of
+    // which are already listed here, so including it changes nothing at runtime
+    // — it just makes the dependency honest instead of relying on that overlap.
   }, [
     currentCharIndex,
     displayedText,
@@ -156,6 +156,7 @@ const TextType = ({
     isVisible,
     reverseMode,
     variableSpeed,
+    getRandomSpeed,
     onSentenceComplete
   ]);
 
