@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { gsap } from 'gsap';
+import TextType from './TextType';
 import './MagicBento.css';
 
 const DEFAULT_PARTICLE_COUNT = 12;
@@ -60,7 +61,24 @@ const CardContent = ({ card }) => (
     </div>
     <div className="magic-bento-card__content">
       <h2 className="magic-bento-card__title">{card.title}</h2>
-      {card.description && <p className="magic-bento-card__description">{card.description}</p>}
+      {card.description && (
+        <div className="magic-bento-card__description-wrap">
+          {/* Invisible ghost reserves the final (clamped) height so the typing
+              animation can't grow the card mid-type and shove surrounding layout. */}
+          <p aria-hidden="true" className="magic-bento-card__description magic-bento-card__description--ghost">
+            {card.description}
+          </p>
+          <TextType
+            as="p"
+            text={card.description}
+            typingSpeed={35}
+            pauseDuration={4000}
+            loop={false}
+            showCursor={true}
+            className="magic-bento-card__description magic-bento-card__description--typed"
+          />
+        </div>
+      )}
       {card.action && <div className="magic-bento-card__action">{card.action}</div>}
     </div>
   </>

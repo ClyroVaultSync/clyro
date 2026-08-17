@@ -35,6 +35,16 @@ const TextType = ({
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
 
+  // A reused instance (e.g. a grid slot that keeps its component identity while
+  // its text prop changes) must restart typing from scratch instead of staying
+  // stuck at whatever character index the previous text finished on.
+  useEffect(() => {
+    setDisplayedText('');
+    setCurrentCharIndex(0);
+    setIsDeleting(false);
+    setCurrentTextIndex(0);
+  }, [textArray]);
+
   const getRandomSpeed = useCallback(() => {
     if (!variableSpeed) return typingSpeed;
     const { min, max } = variableSpeed;

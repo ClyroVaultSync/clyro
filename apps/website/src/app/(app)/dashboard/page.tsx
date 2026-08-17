@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import localFont from 'next/font/local';
 import MagicBento from '../../../components/MagicBento';
 import { PageHeader } from '../../../components/ui/PageHeader';
-import { Button } from '../../../components/ui/Button';
+import { InteractiveHoverButton } from '../../../components/ui/interactive-hover-button';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Icons } from '../../../components/icons';
 import { useExtensionStatus } from '../../../hooks/useExtensionStatus';
@@ -23,9 +24,15 @@ const PROVIDER_LABEL: Record<SyncProviderId, string> = {
   dropbox: 'Dropbox'
 };
 
-const ACCENT = '94, 234, 212';
+const ACCENT = '255, 255, 255';
 const SUCCESS = '74, 222, 128';
 const WARNING = '251, 191, 36';
+
+const basementGrotesque = localFont({
+  src: '../../../fonts/basement-grotesque/BasementGrotesque-Black.woff2',
+  variable: '--font-basement-grotesque',
+  display: 'swap'
+});
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -55,9 +62,12 @@ export default function DashboardPage() {
             'Install the Clyro extension for Chrome to create or unlock your vault. This website never renders vault contents — the extension is where your vault actually lives.',
           icon: <Icons.Download className="h-5 w-5" />,
           action: (
-            <Button size="sm" onClick={() => window.open('https://chrome.google.com/webstore', '_blank')}>
+            <InteractiveHoverButton
+              className="px-4 py-1.5 text-sm"
+              onClick={() => window.open('https://chrome.google.com/webstore', '_blank')}
+            >
               Install for Chrome
-            </Button>
+            </InteractiveHoverButton>
           ),
           className: 'sm:col-span-2 lg:col-span-2 lg:col-start-2'
         }
@@ -70,9 +80,9 @@ export default function DashboardPage() {
             description: 'A small background app on your own machine. Free, and nothing ever leaves it.',
             icon: <Icons.Computer className="h-5 w-5" />,
             action: (
-              <Button size="sm" onClick={() => router.push('/dashboard/setup/local')}>
+              <InteractiveHoverButton className="px-4 py-1.5 text-sm" onClick={() => router.push('/dashboard/setup/local')}>
                 Set up Local
-              </Button>
+              </InteractiveHoverButton>
             ),
             className: 'lg:col-span-2'
           },
@@ -82,9 +92,9 @@ export default function DashboardPage() {
             description: 'Sync your encrypted vault to a cloud account you already have.',
             icon: <Icons.Cloud className="h-5 w-5" />,
             action: (
-              <Button size="sm" onClick={() => router.push('/dashboard/setup/cloud')}>
+              <InteractiveHoverButton className="px-4 py-1.5 text-sm" onClick={() => router.push('/dashboard/setup/cloud')}>
                 Set up Cloud
-              </Button>
+              </InteractiveHoverButton>
             ),
             className: 'lg:col-span-2'
           }
@@ -114,19 +124,20 @@ export default function DashboardPage() {
             description: "Opens the extension's full-page vault tab — this website never sees what's inside.",
             icon: <Icons.LayoutDashboard className="h-5 w-5" />,
             action: (
-              <Button size="sm" isLoading={openingVault} onClick={handleOpenVault}>
+              <InteractiveHoverButton className="px-4 py-1.5 text-sm" isLoading={openingVault} onClick={handleOpenVault}>
                 Open Vault
-              </Button>
+              </InteractiveHoverButton>
             ),
             className: 'lg:col-span-2'
           }
         ];
 
   return (
-    <>
+    <div className={basementGrotesque.variable}>
       <PageHeader
         title="Dashboard"
         subtitle="Launch your vault, or set up where it lives."
+        titleClassName={basementGrotesque.className}
       />
 
       <div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-raised/50 px-4 py-3">
@@ -147,6 +158,6 @@ export default function DashboardPage() {
         enableSpotlight
         enableBorderGlow
       />
-    </>
+    </div>
   );
 }

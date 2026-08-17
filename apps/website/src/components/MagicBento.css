@@ -77,6 +77,7 @@
 }
 
 .magic-bento-card__title {
+  font-family: var(--font-basement-grotesque), inherit;
   font-weight: 600;
   font-size: 18px;
   color: var(--color-heading);
@@ -87,6 +88,19 @@
   font-size: 13px;
   line-height: 1.35;
   color: var(--color-body);
+}
+
+.magic-bento-card__description-wrap {
+  position: relative;
+}
+
+.magic-bento-card__description--ghost {
+  visibility: hidden;
+}
+
+.magic-bento-card__description--typed {
+  position: absolute;
+  inset: 0;
 }
 
 .magic-bento-card__action {
