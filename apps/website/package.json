@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@clyro/shared-types": "workspace:*",
     "animejs": "^4.5.0",
     "autoprefixer": "^10.5.4",
     "framer-motion": "^13.0.0",

@@ -13,7 +13,7 @@ export default function Home() {
       </div>
       <CtaButtons />
       <TextType
-        text="Clyro is a free, open-source, zero-knowledge password manager for Chrome — your vault is encrypted so only you can ever read it."
+        text="Clyro is a free, open-source, zero-knowledge password manager for Chrome. Choose where your vault lives — a server you run yourself, or your own Google Drive or Dropbox — it's encrypted either way, so only you can ever read it."
         typingSpeed={35}
         pauseDuration={4000}
         loop={false}

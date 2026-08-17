@@ -6,7 +6,7 @@ const COLUMNS = [
   {
     title: 'Product',
     links: [
-      { label: 'Download for Chrome', href: '#download' },
+      { label: 'Download for Chrome', href: '/dashboard' },
       { label: 'Security', href: '#security' }
     ]
   },
