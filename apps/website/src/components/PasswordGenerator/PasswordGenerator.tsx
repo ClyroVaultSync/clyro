@@ -86,12 +86,6 @@ function getStrength(length: number, poolSize: number) {
   return { ...STRENGTH_LEVELS[3], segments: 4 };
 }
 
-function charClass(char: string): string {
-  if (NUMBERS.includes(char)) return 'text-accent';
-  if (SYMBOLS.includes(char)) return 'text-body';
-  return 'text-heading';
-}
-
 interface OptionRowProps {
   label: string;
   hint: string;
@@ -173,7 +167,7 @@ export function PasswordGenerator() {
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, delay: i * 0.012, ease: 'easeOut' }}
-                className={charClass(char)}
+                className="text-white"
               >
                 {char}
               </motion.span>
