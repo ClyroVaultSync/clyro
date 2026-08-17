@@ -1,16 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 import Stepper, { Step } from '../../../../../components/Stepper';
 import { PageHeader } from '../../../../../components/ui/PageHeader';
 import { Button } from '../../../../../components/ui/Button';
 import { Alert } from '../../../../../components/ui/Alert';
 import { Badge } from '../../../../../components/ui/Badge';
 import { Icons } from '../../../../../components/icons';
+import { useExtensionStatus } from '../../../../../hooks/useExtensionStatus';
+import { siteConfig } from '../../../../../lib/site-config';
 
 export default function LocalSetupPage() {
-  const [pairing, setPairing] = useState<'idle' | 'waiting' | 'paired'>('idle');
+  const { status, loading, refresh } = useExtensionStatus();
+
+  const isPaired = status.installed && status.provider === 'local';
+  const downloadUrl = siteConfig.localServerDownloadUrl;
+
+  // Three distinct situations, and the instruction differs in each: the visitor
+  // has no extension at all, has one but hasn't picked a provider, or is done.
+  const pairingLabel = loading ? 'Checking…' : isPaired ? 'Paired' : 'Not paired';
+  const pairingDetail = loading
+    ? 'Checking whether the Clyro extension is installed…'
+    : isPaired
+      ? 'The extension is paired with your Local Sync Server.'
+      : status.installed
+        ? 'Open the Clyro extension and choose "Pair with Local Sync Server".'
+        : 'The Clyro extension isn’t installed yet — install it first, then come back to this step.';
 
   return (
     <>
@@ -38,9 +53,17 @@ export default function LocalSetupPage() {
               database on this machine. It never sees your master password or decrypted credentials.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="primary" size="sm">
-                Download for Windows
-              </Button>
+              {downloadUrl ? (
+                <a href={downloadUrl} rel="noopener noreferrer">
+                  <Button variant="primary" size="sm">
+                    Download for Windows
+                  </Button>
+                </a>
+              ) : (
+                <Button variant="primary" size="sm" disabled>
+                  Windows (coming soon)
+                </Button>
+              )}
               <Button variant="secondary" size="sm" disabled>
                 macOS (coming soon)
               </Button>
@@ -48,6 +71,20 @@ export default function LocalSetupPage() {
                 Linux (coming soon)
               </Button>
             </div>
+            {!downloadUrl && (
+              <p className="text-xs text-body/70">
+                The Local Sync Server isn’t released yet. Cloud storage is available today, or watch the{' '}
+                <a
+                  href={siteConfig.githubUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-heading underline underline-offset-2"
+                >
+                  GitHub repository
+                </a>{' '}
+                for the release.
+              </p>
+            )}
           </div>
         </Step>
 
@@ -83,28 +120,28 @@ export default function LocalSetupPage() {
             </p>
             <div className="flex flex-col gap-3 rounded-md border border-border bg-raised p-4">
               <div className="flex items-center gap-2">
-                <Badge variant={pairing === 'paired' ? 'success' : 'neutral'}>
-                  {pairing === 'paired' ? 'Paired' : pairing === 'waiting' ? 'Waiting…' : 'Not paired'}
-                </Badge>
+                <Badge variant={isPaired ? 'success' : 'neutral'}>{pairingLabel}</Badge>
               </div>
-              <p className="text-sm text-body">
-                {pairing === 'paired'
-                  ? 'The extension is paired with this Local Sync Server.'
-                  : 'Open the Clyro extension and choose "Pair with Local Sync Server".'}
-              </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-fit"
-                onClick={() => {
-                  setPairing('waiting');
-                  setTimeout(() => setPairing('paired'), 900);
-                }}
-                disabled={pairing !== 'idle'}
-              >
-                <Icons.RefreshCw className="mr-2 h-4 w-4" />
-                Simulate pairing
-              </Button>
+              <p className="text-sm text-body">{pairingDetail}</p>
+              {status.installed || loading ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => void refresh()}
+                  isLoading={loading}
+                >
+                  <Icons.RefreshCw className="mr-2 h-4 w-4" />
+                  Check again
+                </Button>
+              ) : (
+                <a href={siteConfig.chromeWebStoreUrl} target="_blank" rel="noopener noreferrer" className="w-fit">
+                  <Button variant="secondary" size="sm">
+                    <Icons.Download className="mr-2 h-4 w-4" />
+                    Install the extension
+                  </Button>
+                </a>
+              )}
             </div>
           </div>
         </Step>

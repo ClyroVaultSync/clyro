@@ -5,7 +5,9 @@ import './MagicBento.css';
 
 const DEFAULT_PARTICLE_COUNT = 12;
 const DEFAULT_SPOTLIGHT_RADIUS = 300;
-const DEFAULT_GLOW_COLOR = '94, 234, 212';
+// --color-accent as RGB channels (composed into rgba() at use sites).
+// The Dashboard overrides this with white; this is the fallback for any other caller.
+const DEFAULT_GLOW_COLOR = '139, 92, 246';
 const MOBILE_BREAKPOINT = 768;
 
 const defaultCards = [

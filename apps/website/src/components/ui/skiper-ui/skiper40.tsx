@@ -58,6 +58,7 @@ const Link001 = ({
     <a
       href={href}
       target="_blank"
+      rel="noopener noreferrer"
       className={cn("group relative inline-flex items-center", className)}
     >
       <span

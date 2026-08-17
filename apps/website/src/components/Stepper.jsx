@@ -1,7 +1,14 @@
-import React, { useState, Children, useRef, useLayoutEffect } from 'react';
+import React, { useState, Children, useRef, useLayoutEffect, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
 import './Stepper.css';
+
+// Framer animates these as literal colour values, so they can't be `var(...)`
+// like the rest of Stepper.css. Kept in sync with globals.css by hand —
+// --color-accent, --color-raised, --color-body.
+const ACCENT = '#8b5cf6';
+const RAISED = '#1a1210';
+const BODY = '#a39c97';
 
 export default function Stepper({
   children,
@@ -123,6 +130,9 @@ export default function Stepper({
 }
 
 function StepContentWrapper({ isCompleted, currentStep, direction, children, className }) {
+  // setParentHeight is handed to SlideTransition directly rather than wrapped in
+  // an inline arrow: its ResizeObserver keys off this identity, and a fresh
+  // function each render would tear the observer down and rebuild it every time.
   const [parentHeight, setParentHeight] = useState(0);
 
   return (
@@ -134,7 +144,7 @@ function StepContentWrapper({ isCompleted, currentStep, direction, children, cla
     >
       <AnimatePresence initial={false} mode="sync" custom={direction}>
         {!isCompleted && (
-          <SlideTransition key={currentStep} direction={direction} onHeightReady={h => setParentHeight(h)}>
+          <SlideTransition key={currentStep} direction={direction} onHeightReady={setParentHeight}>
             {children}
           </SlideTransition>
         )}
@@ -146,9 +156,32 @@ function StepContentWrapper({ isCompleted, currentStep, direction, children, cla
 function SlideTransition({ children, direction, onHeightReady }) {
   const containerRef = useRef(null);
 
+  // The parent clips to exactly this height (overflow: hidden), so under-
+  // measuring by even a fraction of a pixel shaves the bottom border off the
+  // last element. `offsetHeight` is a rounded integer and was doing exactly
+  // that; getBoundingClientRect keeps the fraction, and ceil rounds the safe
+  // way. Measured once synchronously for the slide-in...
   useLayoutEffect(() => {
-    if (containerRef.current) onHeightReady(containerRef.current.offsetHeight);
+    if (containerRef.current) {
+      onHeightReady(Math.ceil(containerRef.current.getBoundingClientRect().height));
+    }
   }, [children, onHeightReady]);
+
+  // ...and tracked afterwards, because a single measurement is taken before web
+  // fonts settle and before any nested enter-animation finishes. Content that
+  // reflows after that point (a paragraph rewrapping, a callout expanding)
+  // would otherwise stay clipped at its initial height.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      onHeightReady(Math.ceil(entry.target.getBoundingClientRect().height));
+    });
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, [onHeightReady]);
 
   return (
     <motion.div
@@ -196,9 +229,9 @@ function StepIndicator({ step, currentStep, onClickStep, disableStepIndicators }
     <motion.div onClick={handleClick} className="step-indicator" style={disableStepIndicators ? { pointerEvents: 'none', opacity: 0.5 } : {}} animate={status} initial={false}>
       <motion.div
         variants={{
-          inactive: { scale: 1, backgroundColor: '#1a1210', color: '#a39c97' },
-          active: { scale: 1, backgroundColor: '#5eead4', color: '#5eead4' },
-          complete: { scale: 1, backgroundColor: '#5eead4', color: '#5eead4' }
+          inactive: { scale: 1, backgroundColor: RAISED, color: BODY },
+          active: { scale: 1, backgroundColor: ACCENT, color: ACCENT },
+          complete: { scale: 1, backgroundColor: ACCENT, color: ACCENT }
         }}
         transition={{ duration: 0.3 }}
         className="step-indicator-inner"
@@ -218,7 +251,7 @@ function StepIndicator({ step, currentStep, onClickStep, disableStepIndicators }
 function StepConnector({ isComplete }) {
   const lineVariants = {
     incomplete: { width: 0, backgroundColor: 'transparent' },
-    complete: { width: '100%', backgroundColor: '#5eead4' }
+    complete: { width: '100%', backgroundColor: ACCENT }
   };
 
   return (

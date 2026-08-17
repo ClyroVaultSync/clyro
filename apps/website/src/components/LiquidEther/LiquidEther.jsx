@@ -1000,8 +1000,8 @@ export default function LiquidEther({
             Common.renderer.dispose();
             Common.renderer.forceContextLoss();
           }
-        } catch (e) {
-          void 0;
+        } catch {
+          // Teardown is best-effort; a disposed context throwing here is not actionable.
         }
       }
     }
@@ -1080,15 +1080,15 @@ export default function LiquidEther({
       if (resizeObserverRef.current) {
         try {
           resizeObserverRef.current.disconnect();
-        } catch (e) {
-          void 0;
+        } catch {
+          // Teardown is best-effort; a disposed context throwing here is not actionable.
         }
       }
       if (intersectionObserverRef.current) {
         try {
           intersectionObserverRef.current.disconnect();
-        } catch (e) {
-          void 0;
+        } catch {
+          // Teardown is best-effort; a disposed context throwing here is not actionable.
         }
       }
       if (webglRef.current) {

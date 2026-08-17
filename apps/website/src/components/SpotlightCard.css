@@ -8,7 +8,9 @@
   transition: border-color 0.2s ease-out;
   --mouse-x: 50%;
   --mouse-y: 50%;
-  --spotlight-color: rgba(94, 234, 212, 0.12);
+  /* --color-accent at 12%. Literal rather than var(): this is consumed inside a
+     radial-gradient, where the token would have to be pre-split into channels. */
+  --spotlight-color: rgba(139, 92, 246, 0.12);
 }
 
 .card-spotlight:hover,

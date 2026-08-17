@@ -46,6 +46,10 @@
 .step-default {
   padding-left: 2rem;
   padding-right: 2rem;
+  /* The wrapper above clips with overflow: hidden, and a box-shadow paints
+     outside its element's border box — so a shadowed last child (e.g. an Alert)
+     needs clearance inside the clip or its shadow is sheared off. */
+  padding-bottom: 0.5rem;
 }
 
 .footer-container {

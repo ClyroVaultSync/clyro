@@ -8,6 +8,9 @@ import { Button } from '../../../../../components/ui/Button';
 import { Badge } from '../../../../../components/ui/Badge';
 import { Alert } from '../../../../../components/ui/Alert';
 import { Icons } from '../../../../../components/icons';
+import { useExtensionStatus } from '../../../../../hooks/useExtensionStatus';
+import { openVault } from '../../../../../lib/extension-bridge';
+import { siteConfig } from '../../../../../lib/site-config';
 import type { SyncProviderId } from '@clyro/shared-types';
 
 const PROVIDERS: {
@@ -30,15 +33,25 @@ const PROVIDERS: {
 ];
 
 export default function CloudSetupPage() {
+  const { status, refresh } = useExtensionStatus();
   const [connecting, setConnecting] = useState<SyncProviderId | null>(null);
-  const [connected, setConnected] = useState<SyncProviderId | null>(null);
+  const [handoffFailed, setHandoffFailed] = useState(false);
 
-  const handleConnect = (id: SyncProviderId) => {
+  // The real OAuth flow runs inside the extension (chrome.identity), so all this
+  // page can do is open the extension and let it take over — there is no
+  // website-side "connected" state to invent.
+  const connected = status.installed ? status.provider : null;
+
+  const handleConnect = async (id: SyncProviderId) => {
     setConnecting(id);
-    setTimeout(() => {
-      setConnecting(null);
-      setConnected(id);
-    }, 900);
+    setHandoffFailed(false);
+    const opened = await openVault();
+    setConnecting(null);
+    if (opened) {
+      void refresh();
+    } else {
+      setHandoffFailed(true);
+    }
   };
 
   return (
@@ -62,6 +75,29 @@ export default function CloudSetupPage() {
         description="Clicking Connect below hands off to the Clyro extension, which runs the real Google/Dropbox sign-in (via chrome.identity). This website never sees your Google or Dropbox account, and the connection itself never touches your master password or vault contents."
         className="mb-6"
       />
+
+      <Alert
+        isVisible={handoffFailed}
+        variant="warning"
+        title="The extension didn't respond"
+        description="Clyro couldn't hand off to the extension. Install or enable the Clyro extension for Chrome, then try connecting again."
+        onClose={() => setHandoffFailed(false)}
+        className="mb-6"
+      />
+
+      {!status.installed && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-border bg-raised px-4 py-3">
+          <p className="text-sm text-body">
+            The Clyro extension isn’t installed yet — cloud storage is connected from inside it.
+          </p>
+          <a href={siteConfig.chromeWebStoreUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="secondary" size="sm">
+              <Icons.Download className="mr-2 h-4 w-4" />
+              Install for Chrome
+            </Button>
+          </a>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {PROVIDERS.map(provider => {
@@ -88,7 +124,7 @@ export default function CloudSetupPage() {
                 className="mt-auto w-fit"
                 isLoading={isConnecting}
                 disabled={isConnected}
-                onClick={() => handleConnect(provider.id)}
+                onClick={() => void handleConnect(provider.id)}
               >
                 {isConnected ? 'Connected' : `Connect ${provider.name}`}
               </Button>

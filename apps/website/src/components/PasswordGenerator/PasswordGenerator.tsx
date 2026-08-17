@@ -127,7 +127,9 @@ export function PasswordGenerator() {
 
   React.useEffect(() => {
     regenerate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally keyed to the generator settings rather than `regenerate`
+    // itself: the callback is recreated on every settings change, so depending
+    // on it would be equivalent but noisier.
   }, [length, useUpper, useLower, useNumbers, useSymbols, excludeAmbiguous]);
 
   React.useEffect(() => () => clearTimeout(copyTimeout.current), []);

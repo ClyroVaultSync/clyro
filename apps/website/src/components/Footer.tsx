@@ -1,28 +1,29 @@
 import React from 'react';
 import CircularText from './CircularText/CircularText';
 import { Link000, Link001 } from './ui/skiper-ui/skiper40';
+import { siteConfig } from '../lib/site-config';
 
 const COLUMNS = [
   {
     title: 'Product',
     links: [
       { label: 'Download for Chrome', href: '/dashboard' },
-      { label: 'Security', href: '#security' }
+      { label: 'Password Generator', href: '/password-generator' }
     ]
   },
   {
     title: 'Open Source',
     links: [
-      { label: 'GitHub', href: '#' },
-      { label: 'Contributing', href: '#' }
+      { label: 'GitHub', href: siteConfig.githubUrl },
+      { label: 'Contributing', href: siteConfig.contributingUrl }
     ]
   },
   {
     title: 'Legal',
     links: [
-      { label: 'Privacy', href: '#' },
-      { label: 'Terms', href: '#' },
-      { label: 'Security Policy', href: '#' }
+      { label: 'Privacy', href: '/privacy' },
+      { label: 'Terms', href: '/terms' },
+      { label: 'Security', href: '/security' }
     ]
   }
 ];
@@ -45,7 +46,9 @@ export default function Footer() {
             <span className="text-xs font-semibold uppercase tracking-wider text-heading">{column.title}</span>
             <ul className="flex flex-col gap-1">
               {column.links.map(link => {
-                const LinkComponent = link.label === 'GitHub' ? Link001 : Link000;
+                // Link001 is the external variant (new tab + arrow); Link000
+                // wraps next/link for in-app routes.
+                const LinkComponent = link.href.startsWith('http') ? Link001 : Link000;
                 return (
                   <li key={link.label}>
                     <LinkComponent

@@ -7,17 +7,24 @@ import { Space_Grotesk } from 'next/font/google';
 import MagicBento from '../../../components/MagicBento';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { InteractiveHoverButton } from '../../../components/ui/interactive-hover-button';
+import { Alert } from '../../../components/ui/Alert';
+import { Skeleton } from '../../../components/ui/Skeleton';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Icons } from '../../../components/icons';
 import { useExtensionStatus } from '../../../hooks/useExtensionStatus';
-import type { SyncProviderId } from '@clyro/shared-types';
+import { openVault } from '../../../lib/extension-bridge';
+import { siteConfig } from '../../../lib/site-config';
+import type { ExtensionStatus, SyncProviderId } from '@clyro/shared-types';
 
-const PREVIEW_STATES = [
-  { id: 'not-installed', label: 'Not installed' },
-  { id: 'no-provider', label: 'No provider' },
-  { id: 'local', label: 'Local' },
-  { id: 'cloud', label: 'Cloud' }
-] as const;
+/** Dev-only override so every render state stays reviewable without installing
+ * the extension. Stripped from production builds — see the render below. */
+const PREVIEW_STATES: { id: string; label: string; status: ExtensionStatus }[] = [
+  { id: 'live', label: 'Live', status: { installed: false } },
+  { id: 'not-installed', label: 'Not installed', status: { installed: false } },
+  { id: 'no-provider', label: 'No provider', status: { installed: true, provider: null, locked: true } },
+  { id: 'local', label: 'Local', status: { installed: true, provider: 'local', locked: false } },
+  { id: 'cloud', label: 'Cloud', status: { installed: true, provider: 'google-drive', locked: true } }
+];
 
 const PROVIDER_LABEL: Record<SyncProviderId, string> = {
   local: 'Local Sync Server',
@@ -44,21 +51,27 @@ const spaceGrotesk = Space_Grotesk({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { status, setStatus } = useExtensionStatus({ installed: false });
-  const [previewState, setPreviewState] = useState<(typeof PREVIEW_STATES)[number]['id']>('not-installed');
+  const { status: liveStatus, loading, refresh } = useExtensionStatus();
+  const [previewId, setPreviewId] = useState('live');
   const [openingVault, setOpeningVault] = useState(false);
+  const [openFailed, setOpenFailed] = useState(false);
 
-  const handlePreviewChange = (id: string) => {
-    setPreviewState(id as (typeof PREVIEW_STATES)[number]['id']);
-    if (id === 'not-installed') setStatus({ installed: false });
-    if (id === 'no-provider') setStatus({ installed: true, provider: null, locked: true });
-    if (id === 'local') setStatus({ installed: true, provider: 'local', locked: false });
-    if (id === 'cloud') setStatus({ installed: true, provider: 'google-drive', locked: true });
-  };
+  const showPreviewSwitcher = process.env.NODE_ENV === 'development';
+  const override = showPreviewSwitcher ? PREVIEW_STATES.find(s => s.id === previewId) : undefined;
+  const isOverridden = Boolean(override) && previewId !== 'live';
+  const status = isOverridden ? override!.status : liveStatus;
 
-  const handleOpenVault = () => {
+  const handleOpenVault = async () => {
     setOpeningVault(true);
-    setTimeout(() => setOpeningVault(false), 700);
+    setOpenFailed(false);
+    const opened = await openVault();
+    setOpeningVault(false);
+    if (opened) {
+      // Opening the vault tab can change the lock state; pick it up on return.
+      void refresh();
+    } else {
+      setOpenFailed(true);
+    }
   };
 
   const cards = !status.installed
@@ -72,7 +85,7 @@ export default function DashboardPage() {
           action: (
             <InteractiveHoverButton
               className="px-4 py-1.5 text-sm"
-              onClick={() => window.open('https://chrome.google.com/webstore', '_blank')}
+              onClick={() => window.open(siteConfig.chromeWebStoreUrl, '_blank', 'noopener,noreferrer')}
             >
               Install for Chrome
             </InteractiveHoverButton>
@@ -148,27 +161,44 @@ export default function DashboardPage() {
         titleClassName={basementGrotesque.className}
       />
 
-      <div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-raised/50 px-4 py-3">
-        <span className={`${spaceGrotesk.className} shrink-0 text-xs uppercase tracking-wider text-body`}>
-          Preview state (mock)
-        </span>
-        <Tabs
-          tabs={PREVIEW_STATES.map(s => ({ id: s.id, label: s.label }))}
-          activeTab={previewState}
-          onChange={handlePreviewChange}
-          labelClassName={spaceGrotesk.className}
-        />
-      </div>
+      {showPreviewSwitcher && (
+        <div className="mb-6 flex items-center gap-3 rounded-md border border-border bg-raised/50 px-4 py-3">
+          <span className={`${spaceGrotesk.className} shrink-0 text-xs uppercase tracking-wider text-body`}>
+            Preview state (dev only)
+          </span>
+          <Tabs
+            tabs={PREVIEW_STATES.map(s => ({ id: s.id, label: s.label }))}
+            activeTab={previewId}
+            onChange={setPreviewId}
+            labelClassName={spaceGrotesk.className}
+          />
+        </div>
+      )}
 
-      <MagicBento
-        cards={cards}
-        glowColor={ACCENT}
-        enableTilt={false}
-        enableMagnetism={false}
-        enableStars={false}
-        enableSpotlight
-        enableBorderGlow
+      <Alert
+        isVisible={openFailed}
+        variant="warning"
+        title="The extension didn't respond"
+        description="Clyro couldn't reach the extension to open your vault. Make sure it's installed and enabled, then try again."
+        onClose={() => setOpenFailed(false)}
+        className="mb-6"
       />
+
+      {loading && !isOverridden ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-48 sm:col-span-2 lg:col-span-2 lg:col-start-2" />
+        </div>
+      ) : (
+        <MagicBento
+          cards={cards}
+          glowColor={ACCENT}
+          enableTilt={false}
+          enableMagnetism={false}
+          enableStars={false}
+          enableSpotlight
+          enableBorderGlow
+        />
+      )}
     </div>
   );
 }

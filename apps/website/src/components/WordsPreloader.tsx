@@ -41,8 +41,9 @@ export default function WordsPreloader({
       setExiting(true);
       onExitStart();
     }, EXIT_START);
+    // Runs once: the exit timer is anchored to mount, not to onExitStart
+    // identity, which would restart it on every parent render.
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

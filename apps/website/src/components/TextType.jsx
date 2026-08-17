@@ -138,8 +138,10 @@ const TextType = ({
       executeTypingAnimation();
     }
 
+    // Deps below are the animation's own state plus its configuration; the
+    // callbacks are deliberately excluded so a new inline handler per render
+    // cannot restart the animation mid-word.
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentCharIndex,
     displayedText,

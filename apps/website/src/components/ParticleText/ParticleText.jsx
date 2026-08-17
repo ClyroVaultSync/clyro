@@ -44,7 +44,9 @@ const waitForFonts = async font => {
 
   try {
     await document.fonts.load(font);
-  } catch {}
+  } catch {
+    // A font that fails to load falls back to the default; drawing still proceeds.
+  }
 
   await document.fonts.ready;
 };
