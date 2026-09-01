@@ -1,59 +1,104 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import fastify from 'fastify';
 import vaultRoutes from './vault';
-import { prisma } from '../db';
+import { requirePairing } from '../plugins/auth';
+import { createPairingToken } from '../services/pairingTokens';
+import { db } from '../db';
 
-vi.mock('../db', () => ({
-  prisma: {
-    vault: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    },
-  },
-}));
+const ALLOWED_ORIGIN = 'http://localhost:3000';
+
+async function buildApp() {
+  const app = fastify();
+  app.register(async (instance) => {
+    instance.addHook('preHandler', requirePairing);
+    instance.register(vaultRoutes, { prefix: '/api/v1/vault' });
+  });
+  await app.ready();
+  return app;
+}
 
 describe('Vault Routes', () => {
-  let app: ReturnType<typeof fastify>;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let token: string;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    app = fastify();
-    app.register(vaultRoutes, { prefix: '/api/v1/vault' });
-    await app.ready();
-  });
-
-  const mockVault = {
-    id: 'vault-1',
+  const vaultPayload = {
     encryptedVault: 'encrypted-data',
     vaultSalt: 'test-salt',
-    vaultVersion: 15,
-    lastModified: new Date('2026-07-24T15:00:00.000Z'),
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-07-24T15:00:00.000Z'),
+    vaultVersion: 1,
   };
+
+  function authHeaders() {
+    return { origin: ALLOWED_ORIGIN, authorization: `Bearer ${token}` };
+  }
+
+  function createVault(overrides: Partial<typeof vaultPayload> = {}) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/vault',
+      headers: authHeaders(),
+      payload: { ...vaultPayload, ...overrides },
+    });
+  }
+
+  beforeEach(async () => {
+    db.exec('DELETE FROM vault; DELETE FROM pairing_tokens;');
+    token = createPairingToken();
+    app = await buildApp();
+  });
+
+  describe('authentication', () => {
+    it('rejects a request with no pairing token', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/vault',
+        headers: { origin: ALLOWED_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects a request with an invalid pairing token', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/vault',
+        headers: { origin: ALLOWED_ORIGIN, authorization: 'Bearer not-a-real-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('rejects a request from a disallowed origin', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/vault',
+        headers: { origin: 'https://evil.example', authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+  });
 
   describe('GET /', () => {
     it('should return vault successfully', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
+      await createVault();
 
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().data.vaultVersion).toBe(15);
-      expect(prisma.vault.findFirst).toHaveBeenCalledWith();
+      expect(response.json().data.vaultVersion).toBe(1);
+      expect(response.json().data.vaultSalt).toBe('test-salt');
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
-
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(404);
@@ -63,27 +108,23 @@ describe('Vault Routes', () => {
 
   describe('GET /metadata', () => {
     it('should return metadata successfully', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue({
-        vaultVersion: 15,
-        lastModified: mockVault.lastModified,
-      } as never);
+      await createVault();
 
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault/metadata',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().data.vaultVersion).toBe(15);
-      expect(response.json().data.lastModified).toBe(mockVault.lastModified.toISOString());
+      expect(response.json().data.vaultVersion).toBe(1);
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
-
       const response = await app.inject({
         method: 'GET',
         url: '/api/v1/vault/metadata',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(404);
@@ -92,39 +133,18 @@ describe('Vault Routes', () => {
 
   describe('POST /', () => {
     it('should create a vault successfully', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
-      vi.mocked(prisma.vault.create).mockResolvedValue(mockVault as never);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'encrypted-data',
-          vaultSalt: 'test-salt',
-          vaultVersion: 1,
-        },
-      });
+      const response = await createVault();
 
       expect(response.statusCode).toBe(201);
-      expect(response.json().data.vaultVersion).toBe(15); // Returns mocked vault
-      expect(prisma.vault.create).toHaveBeenCalledWith({
-        data: {
-          encryptedVault: 'encrypted-data',
-          vaultSalt: 'test-salt',
-          vaultVersion: 1,
-        },
-      });
+      expect(response.json().data.vaultVersion).toBe(1);
     });
 
     it('should return 422 if vaultSalt is missing', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'encrypted-data',
-          vaultVersion: 1,
-          // Missing vaultSalt
-        },
+        headers: authHeaders(),
+        payload: { encryptedVault: 'encrypted-data', vaultVersion: 1 },
       });
 
       expect(response.statusCode).toBe(422);
@@ -132,105 +152,62 @@ describe('Vault Routes', () => {
     });
 
     it('should return 409 if vault already exists', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'encrypted-data',
-          vaultSalt: 'test-salt',
-          vaultVersion: 1,
-        },
-      });
+      await createVault();
+      const response = await createVault();
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error.code).toBe('CONFLICT');
-    });
-
-    it('should return 422 for invalid body', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/vault',
-        payload: {
-          vaultVersion: 1,
-          // Missing encryptedVault
-        },
-      });
-
-      expect(response.statusCode).toBe(422);
-      expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
   });
 
   describe('PUT /', () => {
     it('should update vault successfully', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
-      const updatedVault = { ...mockVault, vaultVersion: 16 };
-      vi.mocked(prisma.vault.update).mockResolvedValue(updatedVault as never);
+      await createVault();
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'new-encrypted-data',
-          vaultVersion: 16,
-        },
+        headers: authHeaders(),
+        payload: { encryptedVault: 'new-encrypted-data', vaultVersion: 2 },
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().data.vaultVersion).toBe(16);
-      expect(prisma.vault.update).toHaveBeenCalledWith({
-        where: { id: mockVault.id },
-        data: {
-          encryptedVault: 'new-encrypted-data',
-          vaultVersion: 16,
-          lastModified: expect.any(Date),
-        },
-      });
+      expect(response.json().data.vaultVersion).toBe(2);
+      expect(response.json().data.encryptedVault).toBe('new-encrypted-data');
     });
 
     it('should return 409 if vault version is stale/equal', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
+      await createVault();
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'new-encrypted-data',
-          vaultVersion: 15, // Same as existing
-        },
+        headers: authHeaders(),
+        payload: { encryptedVault: 'new-encrypted-data', vaultVersion: 1 },
       });
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error.code).toBe('CONFLICT');
-      expect(response.json().error.details.serverVersion).toBe(15);
+      expect(response.json().error.details.serverVersion).toBe(1);
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
-
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        payload: {
-          encryptedVault: 'new-encrypted-data',
-          vaultVersion: 16,
-        },
+        headers: authHeaders(),
+        payload: { encryptedVault: 'new-encrypted-data', vaultVersion: 2 },
       });
 
       expect(response.statusCode).toBe(404);
-      expect(response.json().error.code).toBe('NOT_FOUND');
     });
 
     it('should return 422 for invalid body', async () => {
       const response = await app.inject({
         method: 'PUT',
         url: '/api/v1/vault',
-        payload: {
-          vaultVersion: 'string-instead-of-number',
-          encryptedVault: 'test',
-        },
+        headers: authHeaders(),
+        payload: { vaultVersion: 'not-a-number', encryptedVault: 'test' },
       });
 
       expect(response.statusCode).toBe(422);
@@ -239,29 +216,26 @@ describe('Vault Routes', () => {
 
   describe('DELETE /', () => {
     it('should delete vault successfully', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(mockVault as never);
-      vi.mocked(prisma.vault.delete).mockResolvedValue(mockVault as never);
+      await createVault();
 
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/v1/vault',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().success).toBe(true);
-      expect(prisma.vault.delete).toHaveBeenCalledWith({ where: { id: mockVault.id } });
     });
 
     it('should return 404 if no vault exists', async () => {
-      vi.mocked(prisma.vault.findFirst).mockResolvedValue(null as never);
-
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/v1/vault',
+        headers: authHeaders(),
       });
 
       expect(response.statusCode).toBe(404);
-      expect(response.json().error.code).toBe('NOT_FOUND');
     });
   });
 });

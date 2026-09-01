@@ -1,21 +1,31 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { createVaultSchema, updateVaultSchema } from '../services/vaultValidation';
-import { prisma } from '../db';
+import { db } from '../db';
 import { successResponse, errorResponse } from '../utils/response';
 
-function serializeVault(vault: {
-  id: string; encryptedVault: string; vaultSalt: string; vaultVersion: number;
-  lastModified: Date; createdAt: Date; updatedAt: Date;
-}) {
+interface VaultRow {
+  id: number;
+  encrypted_vault: string;
+  vault_version: number;
+  vault_salt: string;
+  last_modified: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function getVault(): VaultRow | undefined {
+  return db.prepare('SELECT * FROM vault WHERE id = 1').get() as VaultRow | undefined;
+}
+
+function serializeVault(vault: VaultRow) {
   return {
-    id: vault.id,
-    encryptedVault: vault.encryptedVault,
-    vaultSalt: vault.vaultSalt,
-    vaultVersion: vault.vaultVersion,
-    lastModified: vault.lastModified.toISOString(),
-    createdAt: vault.createdAt.toISOString(),
-    updatedAt: vault.updatedAt.toISOString(),
+    encryptedVault: vault.encrypted_vault,
+    vaultVersion: vault.vault_version,
+    vaultSalt: vault.vault_salt,
+    lastModified: vault.last_modified,
+    createdAt: vault.created_at,
+    updatedAt: vault.updated_at,
   };
 }
 
@@ -23,7 +33,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   // GET /api/v1/vault
   fastify.get('/', async (_request, reply) => {
     try {
-      const vault = await prisma.vault.findFirst();
+      const vault = getVault();
 
       if (!vault) {
         return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
@@ -39,17 +49,15 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   // GET /api/v1/vault/metadata
   fastify.get('/metadata', async (_request, reply) => {
     try {
-      const vault = await prisma.vault.findFirst({
-        select: { vaultVersion: true, lastModified: true },
-      });
+      const vault = getVault();
 
       if (!vault) {
         return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
       }
 
       return reply.status(200).send(successResponse({
-        vaultVersion: vault.vaultVersion,
-        lastModified: vault.lastModified.toISOString(),
+        vaultVersion: vault.vault_version,
+        lastModified: vault.last_modified,
       }));
     } catch (error) {
       console.error('Unexpected error retrieving vault metadata:', error);
@@ -62,20 +70,17 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     try {
       const parsed = createVaultSchema.parse(request.body);
 
-      const existing = await prisma.vault.findFirst();
-      if (existing) {
+      if (getVault()) {
         return reply.status(409).send(errorResponse('CONFLICT', 'A vault already exists on this server. Use PUT to update instead.'));
       }
 
-      const vault = await prisma.vault.create({
-        data: {
-          encryptedVault: parsed.encryptedVault,
-          vaultSalt: parsed.vaultSalt,
-          vaultVersion: parsed.vaultVersion,
-        },
-      });
+      const now = new Date().toISOString();
+      db.prepare(
+        `INSERT INTO vault (id, encrypted_vault, vault_version, vault_salt, last_modified, created_at, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?)`
+      ).run(parsed.encryptedVault, parsed.vaultVersion, parsed.vaultSalt, now, now, now);
 
-      return reply.status(201).send(successResponse(serializeVault(vault)));
+      return reply.status(201).send(successResponse(serializeVault(getVault()!)));
     } catch (error) {
       if (error instanceof ZodError) {
         return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
@@ -90,33 +95,29 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     try {
       const parsed = updateVaultSchema.parse(request.body);
 
-      const existing = await prisma.vault.findFirst();
+      const existing = getVault();
       if (!existing) {
         return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server. Use POST to create one first.'));
       }
 
       // Optimistic concurrency control: reject stale updates
-      if (parsed.vaultVersion <= existing.vaultVersion) {
+      if (parsed.vaultVersion <= existing.vault_version) {
         return reply.status(409).send(errorResponse(
           'CONFLICT',
           'Version conflict: your vault version is out of date.',
           {
-            serverVersion: existing.vaultVersion,
-            lastModified: existing.lastModified.toISOString(),
+            serverVersion: existing.vault_version,
+            lastModified: existing.last_modified,
           }
         ));
       }
 
-      const vault = await prisma.vault.update({
-        where: { id: existing.id },
-        data: {
-          encryptedVault: parsed.encryptedVault,
-          vaultVersion: parsed.vaultVersion,
-          lastModified: new Date(),
-        },
-      });
+      const now = new Date().toISOString();
+      db.prepare(
+        `UPDATE vault SET encrypted_vault = ?, vault_version = ?, last_modified = ?, updated_at = ? WHERE id = 1`
+      ).run(parsed.encryptedVault, parsed.vaultVersion, now, now);
 
-      return reply.status(200).send(successResponse(serializeVault(vault)));
+      return reply.status(200).send(successResponse(serializeVault(getVault()!)));
     } catch (error) {
       if (error instanceof ZodError) {
         return reply.status(422).send(errorResponse('VALIDATION_ERROR', error.issues[0]?.message || 'Validation error'));
@@ -129,12 +130,11 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   // DELETE /api/v1/vault
   fastify.delete('/', async (_request, reply) => {
     try {
-      const existing = await prisma.vault.findFirst();
-      if (!existing) {
+      if (!getVault()) {
         return reply.status(404).send(errorResponse('NOT_FOUND', 'No vault exists on this server.'));
       }
 
-      await prisma.vault.delete({ where: { id: existing.id } });
+      db.prepare('DELETE FROM vault WHERE id = 1').run();
 
       return reply.status(200).send(successResponse({ message: 'Vault deleted successfully.' }));
     } catch (error) {

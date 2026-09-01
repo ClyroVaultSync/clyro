@@ -151,3 +151,9 @@ vite.config.ts.timestamp-*
 # Extension signing key (private half of apps/extension/manifest.json's committed "key" field —
 # only needed later for packaging a signed .crx; never commit private keys)
 apps/extension/clyro-extension-key.pem
+
+# Local Sync Server's bundled SQLite database (runtime data, created on first launch — never commit
+# a user's actual vault) and its WAL/SHM sidecar files
+apps/backend/*.db
+apps/backend/*.db-wal
+apps/backend/*.db-shm
