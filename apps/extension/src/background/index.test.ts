@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
 import { createVault, unlockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { logout } from '../services/authService';
-import { getDevices, revokeDevice } from '../services/deviceService';
-import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
+import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
+import { exportVault, importVault } from '../services/exportImport';
 import { clearVaultKey } from '../storage/sessionStorage';
-import { clearCachedVaultBlob, clearAuthTokens } from '../storage/localStorage';
+import { clearCachedVaultBlob } from '../storage/localStorage';
 import type { BackgroundMessage } from './messages';
 
 vi.mock('./vaultManager', () => ({
@@ -18,22 +17,16 @@ vi.mock('./vaultManager', () => ({
   saveVaultItems: vi.fn(),
 }));
 
-vi.mock('../services/authService', () => ({
-  login: vi.fn(),
-  register: vi.fn(),
-  logout: vi.fn(),
-  isAuthenticated: vi.fn(),
+vi.mock('../providers', () => ({
+  getActiveProviderId: vi.fn(),
+  initiatePairing: vi.fn(),
+  clearLocalConfig: vi.fn(),
+  getLocalConfig: vi.fn(),
 }));
 
-vi.mock('../services/deviceService', () => ({
-  getDevices: vi.fn(),
-  revokeDevice: vi.fn(),
-}));
-
-vi.mock('../services/sessionService', () => ({
-  getSessions: vi.fn(),
-  revokeSession: vi.fn(),
-  logoutAll: vi.fn(),
+vi.mock('../services/exportImport', () => ({
+  exportVault: vi.fn(),
+  importVault: vi.fn(),
 }));
 
 vi.mock('../storage/sessionStorage', () => ({
@@ -42,8 +35,9 @@ vi.mock('../storage/sessionStorage', () => ({
 
 vi.mock('../storage/localStorage', () => ({
   clearCachedVaultBlob: vi.fn(),
-  clearAuthTokens: vi.fn(),
 }));
+
+vi.mock('./bridge', () => ({}));
 
 describe('Background message routing', () => {
   beforeEach(() => {
@@ -52,29 +46,20 @@ describe('Background message routing', () => {
 
   it('UNLOCK_VAULT routes correctly on success', async () => {
     (unlockVault as Mock).mockResolvedValue({ success: true });
-    
+
     const response = await handleMessage({ type: 'UNLOCK_VAULT', masterPassword: 'test' });
-    
+
     expect(unlockVault).toHaveBeenCalledWith('test');
     expect(response).toEqual({ success: true });
   });
 
   it('UNLOCK_VAULT routes correctly on failure', async () => {
     (unlockVault as Mock).mockResolvedValue({ success: false, error: 'Bad password' });
-    
+
     const response = await handleMessage({ type: 'UNLOCK_VAULT', masterPassword: 'test' });
-    
+
     expect(unlockVault).toHaveBeenCalledWith('test');
     expect(response).toEqual({ success: false, error: { code: 'UNLOCK_FAILED', message: 'Bad password' } });
-  });
-
-  it('LOGOUT clears auth tokens, vault key, and cache', async () => {
-    const response = await handleMessage({ type: 'LOGOUT' });
-    
-    expect(logout).toHaveBeenCalled();
-    expect(clearVaultKey).toHaveBeenCalled();
-    expect(clearCachedVaultBlob).toHaveBeenCalled();
-    expect(response).toEqual({ success: true });
   });
 
   it('unknown message type returns an error rather than crashing', async () => {
@@ -93,11 +78,14 @@ describe('Background message routing', () => {
   });
 
   it('CREATE_VAULT routes correctly on failure', async () => {
-    (createVault as Mock).mockResolvedValue({ success: false, error: 'A vault already exists for this account.' });
+    (createVault as Mock).mockResolvedValue({ success: false, error: 'A vault already exists on this storage provider.' });
 
     const response = await handleMessage({ type: 'CREATE_VAULT', masterPassword: 'test' });
 
-    expect(response).toEqual({ success: false, error: { code: 'CREATE_VAULT_FAILED', message: 'A vault already exists for this account.' } });
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'CREATE_VAULT_FAILED', message: 'A vault already exists on this storage provider.' },
+    });
   });
 
   it('GET_VAULT_EXISTS reflects vaultExists()', async () => {
@@ -123,60 +111,6 @@ describe('Background message routing', () => {
 
     expect(saveVaultItems).toHaveBeenCalledWith([]);
     expect(response).toEqual({ success: true });
-  });
-
-  it('GET_DEVICES returns the device list', async () => {
-    (getDevices as Mock).mockResolvedValue({ success: true, data: { devices: [{ id: 'd1' }] } });
-
-    const response = await handleMessage({ type: 'GET_DEVICES' });
-
-    expect(response).toEqual({ success: true, data: { devices: [{ id: 'd1' }] } });
-  });
-
-  it('REVOKE_DEVICE forwards the deviceId', async () => {
-    (revokeDevice as Mock).mockResolvedValue({ success: true, data: { message: 'ok' } });
-
-    const response = await handleMessage({ type: 'REVOKE_DEVICE', deviceId: 'd1' });
-
-    expect(revokeDevice).toHaveBeenCalledWith('d1');
-    expect(response).toEqual({ success: true, data: { message: 'ok' } });
-  });
-
-  it('GET_SESSIONS returns the session list', async () => {
-    (getSessions as Mock).mockResolvedValue({ success: true, data: { sessions: [{ id: 's1' }] } });
-
-    const response = await handleMessage({ type: 'GET_SESSIONS' });
-
-    expect(response).toEqual({ success: true, data: { sessions: [{ id: 's1' }] } });
-  });
-
-  it('REVOKE_SESSION forwards the sessionId', async () => {
-    (revokeSession as Mock).mockResolvedValue({ success: true, data: { message: 'ok' } });
-
-    const response = await handleMessage({ type: 'REVOKE_SESSION', sessionId: 's1' });
-
-    expect(revokeSession).toHaveBeenCalledWith('s1');
-    expect(response).toEqual({ success: true, data: { message: 'ok' } });
-  });
-
-  it('LOGOUT_ALL clears the vault key, cache, and auth tokens on success', async () => {
-    (logoutAll as Mock).mockResolvedValue({ success: true });
-
-    const response = await handleMessage({ type: 'LOGOUT_ALL' });
-
-    expect(clearVaultKey).toHaveBeenCalled();
-    expect(clearCachedVaultBlob).toHaveBeenCalled();
-    expect(clearAuthTokens).toHaveBeenCalled();
-    expect(response).toEqual({ success: true });
-  });
-
-  it('LOGOUT_ALL does NOT clear local state if the server call fails', async () => {
-    (logoutAll as Mock).mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR', message: 'offline' } });
-
-    const response = await handleMessage({ type: 'LOGOUT_ALL' });
-
-    expect(clearVaultKey).not.toHaveBeenCalled();
-    expect(response).toEqual({ success: false, error: { code: 'NETWORK_ERROR', message: 'offline' } });
   });
 
   it('FIND_MATCHING_CREDENTIALS filters vault items by domain', async () => {
@@ -225,5 +159,69 @@ describe('Background message routing', () => {
     expect(savedItems).toHaveLength(1);
     expect(savedItems[0]).toEqual(expect.objectContaining({ id: 'existing-1', password: 'newpw' }));
     expect(response).toEqual({ success: true, data: { updated: true } });
+  });
+
+  it('GET_SETUP_STATE reports no provider when none is configured', async () => {
+    (getActiveProviderId as Mock).mockResolvedValue(null);
+
+    const response = await handleMessage({ type: 'GET_SETUP_STATE' });
+
+    expect(response).toEqual({ success: true, data: { providerId: null, baseUrl: null } });
+  });
+
+  it('GET_SETUP_STATE includes the base URL for a configured Local provider', async () => {
+    (getActiveProviderId as Mock).mockResolvedValue('local');
+    (getLocalConfig as Mock).mockResolvedValue({ baseUrl: 'http://localhost:8080', pairingToken: 't' });
+
+    const response = await handleMessage({ type: 'GET_SETUP_STATE' });
+
+    expect(response).toEqual({ success: true, data: { providerId: 'local', baseUrl: 'http://localhost:8080' } });
+  });
+
+  it('SET_LOCAL_PROVIDER pairs successfully', async () => {
+    (initiatePairing as Mock).mockResolvedValue({ success: true });
+
+    const response = await handleMessage({ type: 'SET_LOCAL_PROVIDER', baseUrl: 'http://localhost:8080' });
+
+    expect(initiatePairing).toHaveBeenCalledWith('http://localhost:8080');
+    expect(response).toEqual({ success: true });
+  });
+
+  it('SET_LOCAL_PROVIDER surfaces a pairing failure', async () => {
+    (initiatePairing as Mock).mockResolvedValue({ success: false, error: 'Could not reach the Local Sync Server.' });
+
+    const response = await handleMessage({ type: 'SET_LOCAL_PROVIDER', baseUrl: 'http://localhost:8080' });
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'PAIRING_FAILED', message: 'Could not reach the Local Sync Server.' },
+    });
+  });
+
+  it('CLEAR_PROVIDER clears the provider config, vault key, and cache', async () => {
+    const response = await handleMessage({ type: 'CLEAR_PROVIDER' });
+
+    expect(clearLocalConfig).toHaveBeenCalled();
+    expect(clearVaultKey).toHaveBeenCalled();
+    expect(clearCachedVaultBlob).toHaveBeenCalled();
+    expect(response).toEqual({ success: true });
+  });
+
+  it('EXPORT_VAULT returns the export file on success', async () => {
+    const file = { version: 1, encryptedVault: 'e', vaultVersion: 1, vaultSalt: 's', exportedAt: 't' };
+    (exportVault as Mock).mockResolvedValue({ success: true, data: file });
+
+    const response = await handleMessage({ type: 'EXPORT_VAULT' });
+
+    expect(response).toEqual({ success: true, data: file });
+  });
+
+  it('IMPORT_VAULT forwards the file contents and password', async () => {
+    (importVault as Mock).mockResolvedValue({ success: true });
+
+    const response = await handleMessage({ type: 'IMPORT_VAULT', fileContents: '{}', masterPassword: 'pw' });
+
+    expect(importVault).toHaveBeenCalledWith('{}', 'pw');
+    expect(response).toEqual({ success: true });
   });
 });

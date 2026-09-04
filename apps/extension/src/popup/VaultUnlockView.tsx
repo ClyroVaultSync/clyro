@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 
 interface Props {
   onUnlockSuccess: () => void;
-  onLogout: () => void;
 }
 
-export default function VaultUnlockView({ onUnlockSuccess, onLogout }: Props) {
+export default function VaultUnlockView({ onUnlockSuccess }: Props) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -27,11 +26,6 @@ export default function VaultUnlockView({ onUnlockSuccess, onLogout }: Props) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogout = async () => {
-    await chrome.runtime.sendMessage({ type: 'LOGOUT' });
-    onLogout();
   };
 
   return (
@@ -66,15 +60,6 @@ export default function VaultUnlockView({ onUnlockSuccess, onLogout }: Props) {
           {loading ? 'Decrypting...' : 'Unlock Vault'}
         </button>
       </form>
-      
-      <div style={{ textAlign: 'center', marginTop: '16px' }}>
-        <button 
-          onClick={handleLogout}
-          style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '14px', textDecoration: 'underline' }}
-        >
-          Sign Out
-        </button>
-      </div>
     </div>
   );
 }

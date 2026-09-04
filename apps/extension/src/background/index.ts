@@ -1,11 +1,11 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
 import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { login, register, logout, isAuthenticated } from '../services/authService';
-import { getDevices, revokeDevice } from '../services/deviceService';
-import { getSessions, revokeSession, logoutAll } from '../services/sessionService';
+import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
+import { exportVault, importVault } from '../services/exportImport';
 import { clearVaultKey } from '../storage/sessionStorage';
-import { clearCachedVaultBlob, clearAuthTokens } from '../storage/localStorage';
+import { clearCachedVaultBlob } from '../storage/localStorage';
 import type { VaultItem } from '@clyro/shared-types';
+import './bridge';
 
 // Note: Ensure manifest.json "background.service_worker" points to the compiled output of this file.
 
@@ -33,27 +33,6 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         await lockVault();
         return { success: true };
       }
-      case 'LOGIN': {
-        const result = await login(message.email, message.password);
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'LOGIN_FAILED', message: 'Login failed.' } };
-      }
-      case 'REGISTER': {
-        const result = await register(message.email, message.password, message.phone);
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'REGISTER_FAILED', message: 'Registration failed.' } };
-      }
-      case 'LOGOUT': {
-        await logout();
-        // Logging out should also fully lock the vault and clear the offline cache
-        await clearVaultKey();
-        await clearCachedVaultBlob();
-        return { success: true };
-      }
-      case 'GET_AUTH_STATUS': {
-        const authenticated = await isAuthenticated();
-        return { success: true, data: { authenticated } };
-      }
       case 'GET_VAULT_LOCK_STATUS': {
         const unlocked = await isVaultUnlocked();
         return { success: true, data: { unlocked } };
@@ -71,37 +50,6 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         const result = await saveVaultItems(message.items);
         if (result.success) return { success: true };
         return { success: false, error: { code: 'SAVE_ITEMS_FAILED', message: result.error || 'Failed to save vault items.' } };
-      }
-      case 'GET_DEVICES': {
-        const result = await getDevices();
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'GET_DEVICES_FAILED', message: 'Failed to fetch devices.' } };
-      }
-      case 'REVOKE_DEVICE': {
-        const result = await revokeDevice(message.deviceId);
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'REVOKE_DEVICE_FAILED', message: 'Failed to revoke device.' } };
-      }
-      case 'GET_SESSIONS': {
-        const result = await getSessions();
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'GET_SESSIONS_FAILED', message: 'Failed to fetch sessions.' } };
-      }
-      case 'REVOKE_SESSION': {
-        const result = await revokeSession(message.sessionId);
-        if (result.success) return { success: true, data: result.data };
-        return { success: false, error: result.error || { code: 'REVOKE_SESSION_FAILED', message: 'Failed to revoke session.' } };
-      }
-      case 'LOGOUT_ALL': {
-        const result = await logoutAll();
-        if (!result.success) {
-          return { success: false, error: result.error || { code: 'LOGOUT_ALL_FAILED', message: 'Failed to log out all sessions.' } };
-        }
-        // Mirrors LOGOUT: revoking every session invalidates this device's own tokens too.
-        await clearVaultKey();
-        await clearCachedVaultBlob();
-        await clearAuthTokens();
-        return { success: true };
       }
       case 'FIND_MATCHING_CREDENTIALS': {
         const result = await getVaultItems();
@@ -133,6 +81,32 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         const saveResult = await saveVaultItems(nextItems);
         if (saveResult.success) return { success: true, data: { updated: Boolean(duplicate) } };
         return { success: false, error: { code: 'SAVE_NEW_CREDENTIAL_FAILED', message: saveResult.error || 'Failed to save credential.' } };
+      }
+      case 'GET_SETUP_STATE': {
+        const providerId = await getActiveProviderId();
+        const config = providerId === 'local' ? await getLocalConfig() : null;
+        return { success: true, data: { providerId, baseUrl: config?.baseUrl ?? null } };
+      }
+      case 'SET_LOCAL_PROVIDER': {
+        const result = await initiatePairing(message.baseUrl);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'PAIRING_FAILED', message: result.error || 'Failed to pair with the Local Sync Server.' } };
+      }
+      case 'CLEAR_PROVIDER': {
+        await clearLocalConfig();
+        await clearVaultKey();
+        await clearCachedVaultBlob();
+        return { success: true };
+      }
+      case 'EXPORT_VAULT': {
+        const result = await exportVault();
+        if (result.success) return { success: true, data: result.data };
+        return { success: false, error: { code: 'EXPORT_FAILED', message: result.error || 'Failed to export vault.' } };
+      }
+      case 'IMPORT_VAULT': {
+        const result = await importVault(message.fileContents, message.masterPassword);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'IMPORT_FAILED', message: result.error || 'Failed to import vault.' } };
       }
       default:
         return { success: false, error: { code: 'UNKNOWN_MESSAGE', message: 'Unrecognized message type.' } };

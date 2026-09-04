@@ -3,7 +3,7 @@ import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists } fro
 import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro/crypto';
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
-import { apiGet, apiPost } from '../services/apiClient';
+import { getActiveProvider } from '../providers';
 
 vi.mock('@clyro/crypto', () => ({
   deriveVaultKey: vi.fn(),
@@ -23,40 +23,50 @@ vi.mock('../storage/localStorage', () => ({
   setCachedVaultBlob: vi.fn(),
 }));
 
-vi.mock('../services/apiClient', () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
+vi.mock('../providers', () => ({
+  getActiveProvider: vi.fn(),
 }));
+
+function mockProvider(overrides: Partial<Record<'getVault' | 'createVault' | 'updateVault' | 'deleteVault' | 'isConnected', Mock>> = {}) {
+  return {
+    id: 'local' as const,
+    getVault: vi.fn().mockResolvedValue(null),
+    createVault: vi.fn().mockResolvedValue({ success: true }),
+    updateVault: vi.fn().mockResolvedValue({ success: true }),
+    deleteVault: vi.fn().mockResolvedValue({ success: true }),
+    isConnected: vi.fn().mockResolvedValue(true),
+    ...overrides,
+  };
+}
 
 describe('vaultManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('unlockVault() success path (server fetch succeeds, decrypt succeeds, key gets stored)', async () => {
-    (apiGet as Mock).mockResolvedValue({
-      success: true,
-      data: { encryptedVault: 'encrypted-data', vaultSalt: 'salt123', vaultVersion: 1 },
+  it('unlockVault() success path (provider fetch succeeds, decrypt succeeds, key gets stored)', async () => {
+    const provider = mockProvider({
+      getVault: vi.fn().mockResolvedValue({ encryptedVault: 'encrypted-data', vaultSalt: 'salt123', vaultVersion: 1 }),
     });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (deriveVaultKey as Mock).mockResolvedValue('derived-key');
     (decryptVault as Mock).mockResolvedValue('decrypted-data');
 
     const result = await unlockVault('correct-password');
 
-    expect(apiGet).toHaveBeenCalledWith('/vault', true);
+    expect(provider.getVault).toHaveBeenCalled();
     expect(setCachedVaultBlob).toHaveBeenCalledWith('encrypted-data', 1, 'salt123');
     expect(deriveVaultKey).toHaveBeenCalledWith('correct-password', 'salt123');
     expect(decryptVault).toHaveBeenCalledWith('derived-key', 'encrypted-data');
     expect(setVaultKey).toHaveBeenCalledWith('derived-key');
-    
     expect(result).toEqual({ success: true });
   });
 
   it('unlockVault() with wrong password returns false and does not call setVaultKey', async () => {
-    (apiGet as Mock).mockResolvedValue({
-      success: true,
-      data: { encryptedVault: 'encrypted-data', vaultSalt: 'salt123', vaultVersion: 1 },
+    const provider = mockProvider({
+      getVault: vi.fn().mockResolvedValue({ encryptedVault: 'encrypted-data', vaultSalt: 'salt123', vaultVersion: 1 }),
     });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (deriveVaultKey as Mock).mockResolvedValue('derived-key');
     (decryptVault as Mock).mockRejectedValue(new Error('Decryption failed'));
 
@@ -66,32 +76,33 @@ describe('vaultManager', () => {
     expect(result).toEqual({ success: false, error: 'Incorrect master password.' });
   });
 
-  it('unlockVault() falls back to cache when the server call fails', async () => {
-    (apiGet as Mock).mockResolvedValue({ success: false }); // network error or no connection
+  it('unlockVault() falls back to cache when the provider is unreachable', async () => {
+    const provider = mockProvider({ getVault: vi.fn().mockRejectedValue(new Error('offline')) });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (getCachedVaultBlob as Mock).mockResolvedValue({ encryptedVault: 'cached-encrypted', vaultSalt: 'cached-salt', vaultVersion: 1 });
-    
     (deriveVaultKey as Mock).mockResolvedValue('derived-key');
     (decryptVault as Mock).mockResolvedValue('decrypted-data');
 
     const result = await unlockVault('correct-password');
 
-    expect(apiGet).toHaveBeenCalledWith('/vault', true);
     expect(getCachedVaultBlob).toHaveBeenCalled();
     expect(deriveVaultKey).toHaveBeenCalledWith('correct-password', 'cached-salt');
     expect(decryptVault).toHaveBeenCalledWith('derived-key', 'cached-encrypted');
     expect(setVaultKey).toHaveBeenCalledWith('derived-key');
-    
     expect(result).toEqual({ success: true });
   });
 
-  it('unlockVault() fails cleanly when BOTH server and cache are unavailable', async () => {
-    (apiGet as Mock).mockResolvedValue({ success: false });
+  it('unlockVault() fails cleanly when BOTH provider and cache are unavailable', async () => {
+    (getActiveProvider as Mock).mockResolvedValue(null);
     (getCachedVaultBlob as Mock).mockResolvedValue(null);
 
     const result = await unlockVault('password');
 
     expect(deriveVaultKey).not.toHaveBeenCalled();
-    expect(result).toEqual({ success: false, error: 'No vault available. Connect to the internet to unlock for the first time.' });
+    expect(result).toEqual({
+      success: false,
+      error: 'No vault available. Connect to the Local Sync Server to unlock for the first time.',
+    });
   });
 
   it('lockVault() calls clearVaultKey()', async () => {
@@ -108,58 +119,66 @@ describe('vaultManager', () => {
   });
 
   it('createVault() generates a salt, encrypts an empty vault, and stores the key on success', async () => {
+    const provider = mockProvider();
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (generateSalt as Mock).mockResolvedValue('new-salt');
     (deriveVaultKey as Mock).mockResolvedValue('derived-key');
     (encryptVault as Mock).mockResolvedValue('encrypted-empty-vault');
-    (apiPost as Mock).mockResolvedValue({
-      success: true,
-      data: { encryptedVault: 'encrypted-empty-vault', vaultSalt: 'new-salt', vaultVersion: 1 },
-    });
 
     const result = await createVault('new-master-password');
 
     expect(generateSalt).toHaveBeenCalled();
     expect(deriveVaultKey).toHaveBeenCalledWith('new-master-password', 'new-salt');
-    expect(apiPost).toHaveBeenCalledWith(
-      '/vault',
-      { encryptedVault: 'encrypted-empty-vault', vaultSalt: 'new-salt', vaultVersion: 1 },
-      true
-    );
+    expect(provider.createVault).toHaveBeenCalledWith({
+      encryptedVault: 'encrypted-empty-vault',
+      vaultSalt: 'new-salt',
+      vaultVersion: 1,
+    });
     expect(setCachedVaultBlob).toHaveBeenCalledWith('encrypted-empty-vault', 1, 'new-salt');
     expect(setVaultKey).toHaveBeenCalledWith('derived-key');
     expect(result).toEqual({ success: true });
   });
 
   it('createVault() surfaces a clear error when a vault already exists', async () => {
+    const provider = mockProvider({
+      createVault: vi.fn().mockResolvedValue({ success: false, error: { code: 'CONFLICT', message: 'exists' } }),
+    });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (generateSalt as Mock).mockResolvedValue('new-salt');
     (deriveVaultKey as Mock).mockResolvedValue('derived-key');
     (encryptVault as Mock).mockResolvedValue('encrypted-empty-vault');
-    (apiPost as Mock).mockResolvedValue({
-      success: false,
-      error: { code: 'CONFLICT', message: 'A vault already exists for this user. Use PUT to update instead.' },
-    });
 
     const result = await createVault('new-master-password');
 
     expect(setVaultKey).not.toHaveBeenCalled();
-    expect(result).toEqual({ success: false, error: 'A vault already exists for this account.' });
+    expect(result).toEqual({ success: false, error: 'A vault already exists on this storage provider.' });
   });
 
-  it('vaultExists() returns true when /vault/metadata succeeds', async () => {
-    (apiGet as Mock).mockResolvedValue({ success: true, data: { vaultVersion: 1 } });
+  it('createVault() fails cleanly with no provider configured', async () => {
+    (getActiveProvider as Mock).mockResolvedValue(null);
+
+    const result = await createVault('password');
+
+    expect(result).toEqual({ success: false, error: 'No storage provider configured.' });
+  });
+
+  it('vaultExists() returns true when the provider has a vault', async () => {
+    const provider = mockProvider({ getVault: vi.fn().mockResolvedValue({ encryptedVault: 'x', vaultSalt: 'y', vaultVersion: 1 }) });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
 
     expect(await vaultExists()).toBe(true);
-    expect(apiGet).toHaveBeenCalledWith('/vault/metadata', true);
   });
 
-  it('vaultExists() returns false on a clean NOT_FOUND', async () => {
-    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NOT_FOUND', message: 'No vault exists for this user.' } });
+  it('vaultExists() returns false when the provider has none', async () => {
+    const provider = mockProvider({ getVault: vi.fn().mockResolvedValue(null) });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
 
     expect(await vaultExists()).toBe(false);
   });
 
-  it('vaultExists() falls back to the offline cache on a non-404 failure', async () => {
-    (apiGet as Mock).mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR', message: 'offline' } });
+  it('vaultExists() falls back to the offline cache when the provider is unreachable', async () => {
+    const provider = mockProvider({ getVault: vi.fn().mockRejectedValue(new Error('offline')) });
+    (getActiveProvider as Mock).mockResolvedValue(provider);
     (getCachedVaultBlob as Mock).mockResolvedValue({ encryptedVault: 'x', vaultSalt: 'y', vaultVersion: 1 });
 
     expect(await vaultExists()).toBe(true);

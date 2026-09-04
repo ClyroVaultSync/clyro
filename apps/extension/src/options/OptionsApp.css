@@ -42,8 +42,8 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-.logout-all-btn {
-  background-color: var(--danger);
+.primary-btn {
+  background-color: var(--primary);
   color: white;
   border: none;
   padding: 10px 16px;
@@ -51,12 +51,15 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
 }
 
-.logout-all-btn:hover {
-  background-color: var(--danger-hover);
-  transform: translateY(-1px);
+.primary-btn:hover {
+  background-color: var(--primary-hover);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .section {

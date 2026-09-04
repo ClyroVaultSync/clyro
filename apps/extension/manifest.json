@@ -4,7 +4,11 @@
   "version": "1.0.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtf+uEk14lkV3w5GbFpVnqjjJW9Ds6NzECzjq98E/FXlF2ua0r8u26BVCnwCH/L7d6l9ZZSHJanQKgbBlOkmJG3dd4bwoMJNG94WqwOWYoONyfj2w69JvfZZ+9sl7UX8oreTt9YpHo/eWRJr14KN85p5LJhJFxAPIc3vbalmzrhzkwlHnPhTeIc9jApHYEIiQOysM4JDcPGYKgettu4rkv+JT/ohdx0vDux7IdA6WBbqIfZYXlzp7oAHxYIXiz3BWvizxz5csLynBa69uLLWM4u/c08BGEap6qSSUtNvdW/EfWn7GJpH6eA64220yggrp6k4F6JOQS14CtZxtmPEIjwIDAQAB",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost/*"
   ],
   "externally_connectable": {
     "matches": [

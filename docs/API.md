@@ -58,7 +58,7 @@ Authorization: Bearer <pairingToken>
 
 Requests missing this header, or presenting an invalid pairing token, receive a `401 UNAUTHORIZED` response. There is no login endpoint, no refresh flow, and no concept of an expiring session token — the pairing token is a long-lived device credential, revoked and reissued only by re-pairing.
 
-The server additionally enforces an Origin allowlist (the extension's own origin, plus `http://localhost:3000` in development) on top of the pairing token. A request that passes the token check but fails the Origin check is also rejected with `401 UNAUTHORIZED`.
+The server additionally enforces an Origin allowlist (the extension's own origin, plus `http://localhost:3000` in development) on top of the pairing token, for requests that carry an `Origin` header at all. A request with an `Origin` header that doesn't match the allowlist is rejected with `401 UNAUTHORIZED`, same as a missing/invalid pairing token. A request with **no** `Origin` header is not rejected on that basis alone — Chrome does not attach one to a plain GET `fetch()` from an extension service worker to a `host_permissions`-covered target (confirmed 2026-09-04), even though it reliably does for POST/PUT/DELETE from the same code. The pairing token remains mandatory on every request regardless of Origin.
 
 ---
 

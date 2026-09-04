@@ -77,6 +77,19 @@ describe('Vault Routes', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('accepts a request with a valid token and no Origin header', async () => {
+      // Chrome omits Origin on plain GET fetches from an extension service
+      // worker to a host_permissions-covered target, even though it sends it
+      // reliably on POST/PUT/DELETE — a missing origin must not be rejected.
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/vault',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404); // no vault created yet in this test, but auth passed
+    });
   });
 
   describe('GET /', () => {
