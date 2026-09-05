@@ -8,10 +8,12 @@ export default defineConfig({
   plugins: [react(), crx({ manifest } as any)],
   build: {
     rollupOptions: {
-      // vault.html is opened via chrome.tabs.create + chrome.runtime.getURL, not
-      // referenced by any manifest field, so CRXJS won't discover it on its own.
+      // vault.html and offscreen.html are opened via chrome.tabs.create /
+      // chrome.offscreen.createDocument, not referenced by any manifest field,
+      // so CRXJS won't discover them on its own.
       input: {
         vault: resolve(__dirname, 'vault.html'),
+        offscreen: resolve(__dirname, 'offscreen.html'),
       },
     },
   },

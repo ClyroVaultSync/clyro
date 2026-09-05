@@ -12,7 +12,8 @@ export type BackgroundMessage =
   | { type: 'SET_LOCAL_PROVIDER'; baseUrl: string }
   | { type: 'CLEAR_PROVIDER' }
   | { type: 'EXPORT_VAULT' }
-  | { type: 'IMPORT_VAULT'; fileContents: string; masterPassword: string };
+  | { type: 'IMPORT_VAULT'; fileContents: string; masterPassword: string }
+  | { type: 'COPY_TO_CLIPBOARD'; text: string };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }

@@ -2,6 +2,7 @@ import type { BackgroundMessage, BackgroundResponse } from './messages';
 import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
 import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
+import { copyToClipboard } from './clipboard';
 import { clearVaultKey } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
 import type { VaultItem } from '@clyro/shared-types';
@@ -107,6 +108,11 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         const result = await importVault(message.fileContents, message.masterPassword);
         if (result.success) return { success: true };
         return { success: false, error: { code: 'IMPORT_FAILED', message: result.error || 'Failed to import vault.' } };
+      }
+      case 'COPY_TO_CLIPBOARD': {
+        const result = await copyToClipboard(message.text);
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'CLIPBOARD_WRITE_FAILED', message: 'Failed to copy to clipboard.' } };
       }
       default:
         return { success: false, error: { code: 'UNKNOWN_MESSAGE', message: 'Unrecognized message type.' } };

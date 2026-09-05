@@ -46,14 +46,20 @@ export default function VaultList({ onLock }: Props) {
     onLock();
   };
 
-  const handleCopy = (text: string) => {
-    if (text) navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string) => {
+    if (!text) return;
+    // Routed through the background/offscreen document rather than calling
+    // navigator.clipboard directly: writeText() can resolve successfully from
+    // inside the action popup without actually reaching the OS clipboard, a
+    // known Chromium quirk for that window type (see src/offscreen/offscreen.ts).
+    const res = await chrome.runtime.sendMessage({ type: "COPY_TO_CLIPBOARD", text });
+    if (!res.success) setError(res.error?.message || "Failed to copy to clipboard.");
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newUrl || !newUsername || !newPassword) {
-      setError("Name, URL, Username, and Password are required.");
+    if (!newName || !newUrl || !newPassword) {
+      setError("Name, URL, and Password are required.");
       return;
     }
 
@@ -184,8 +190,8 @@ export default function VaultList({ onLock }: Props) {
             style={inputStyle}
           />
           <input
-            type="url"
-            placeholder="URL (e.g. https://github.com)"
+            type="text"
+            placeholder="URL (e.g. github.com)"
             value={newUrl}
             onChange={(e) => setNewUrl(e.target.value)}
             required
@@ -193,10 +199,9 @@ export default function VaultList({ onLock }: Props) {
           />
           <input
             type="text"
-            placeholder="Username / Email"
+            placeholder="Username / Email (optional)"
             value={newUsername}
             onChange={(e) => setNewUsername(e.target.value)}
-            required
             style={inputStyle}
           />
           <div style={{ display: "flex", gap: "8px" }}>
