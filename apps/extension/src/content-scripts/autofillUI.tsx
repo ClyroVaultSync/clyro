@@ -7,13 +7,6 @@ interface CredentialsFoundDetail {
   field: HTMLInputElement;
 }
 
-interface NewCredentialDetectedDetail {
-  url: string;
-  username: string;
-  password: string;
-  field: HTMLInputElement;
-}
-
 const UI_CSS = `
   .clyro-overlay {
     position: fixed;
@@ -85,6 +78,14 @@ const UI_CSS = `
     line-height: 1.4;
   }
 
+  .clyro-banner-error {
+    font-size: 12px;
+    color: #ef4444;
+    margin-top: -8px;
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+
   .clyro-banner-actions {
     display: flex;
     gap: 10px;
@@ -151,6 +152,34 @@ function AutofillUI() {
     top: number;
     left: number;
   } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Covers a form submit that navigated away before it could show its own banner (see
+    // detect.ts's handleFormSubmit): the credential survives in the background worker's
+    // stash, and whichever page loads next claims it here. This runs directly in this
+    // component's own mount effect — rather than detect.ts dispatching a clyro:new-credential-detected
+    // event at content-script load time — because that event fires the instant the content
+    // script loads, which can beat this component's very first mount (and thus its listener
+    // registration further down): the round-trip to ask the background worker is often faster
+    // than React committing the initial render. Setting state directly here has no such race.
+    let cancelled = false;
+    chrome.runtime
+      .sendMessage({ type: "GET_PENDING_CREDENTIAL" })
+      .then((response) => {
+        if (cancelled || !response?.success || !response.data) return;
+        const { url, username, password } = response.data as { url: string; username: string; password: string };
+        setNewCred({ url, username, password });
+        setBannerField(null);
+        setBannerPos({ top: 20, left: window.innerWidth - 340 });
+      })
+      .catch(() => {
+        // Best-effort — nothing to show if the background worker can't be reached.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const updatePositions = () => {
     if (activeInput && options.length > 0) {
@@ -182,18 +211,6 @@ function AutofillUI() {
       setDropdownPos({ top: rect.bottom + 4, left: rect.left });
     };
 
-    const onNewCred = (e: Event) => {
-      const { field, ...cred } = (e as CustomEvent<NewCredentialDetectedDetail>).detail;
-      setNewCred(cred);
-      setBannerField(field);
-      if (field && document.contains(field)) {
-        const rect = field.getBoundingClientRect();
-        setBannerPos({ top: rect.bottom + 8, left: rect.left });
-      } else {
-        setBannerPos({ top: 20, left: window.innerWidth - 340 });
-      }
-    };
-
     const handleClickOutside = (e: MouseEvent) => {
       // If we click outside the dropdown, close it
       // The event is on document, so if it reaches here and we didn't click inside shadow DOM, close.
@@ -206,14 +223,12 @@ function AutofillUI() {
     };
 
     window.addEventListener("clyro:credentials-found", onFound);
-    window.addEventListener("clyro:new-credential-detected", onNewCred);
     window.addEventListener("scroll", updatePositions, true);
     window.addEventListener("resize", updatePositions, true);
     document.addEventListener("click", handleClickOutside);
 
     return () => {
       window.removeEventListener("clyro:credentials-found", onFound);
-      window.removeEventListener("clyro:new-credential-detected", onNewCred);
       window.removeEventListener("scroll", updatePositions, true);
       window.removeEventListener("resize", updatePositions, true);
       document.removeEventListener("click", handleClickOutside);
@@ -268,8 +283,9 @@ function AutofillUI() {
 
   const handleSave = async () => {
     if (!newCred) return;
+    setSaveError(null);
     try {
-      await chrome.runtime.sendMessage({
+      const res = await chrome.runtime.sendMessage({
         type: "SAVE_NEW_CREDENTIAL",
         item: {
           name: newCred.url,
@@ -278,8 +294,18 @@ function AutofillUI() {
           password: newCred.password,
         },
       });
-    } catch (e) {
-      console.error("Failed to save credential", e);
+      if (!res?.success) {
+        // Keep the banner open on failure (e.g. the vault is locked) instead of silently
+        // discarding the credential the user just asked to save — nothing else tells them
+        // it didn't work. The credential itself already lives in this component's own state
+        // (not re-fetched from the background worker's one-shot stash), so it's safe to
+        // retry Save again after they've addressed the problem (e.g. unlocking the vault).
+        setSaveError(res?.error?.message || "Failed to save credential.");
+        return;
+      }
+    } catch {
+      setSaveError("Failed to save credential.");
+      return;
     }
     setNewCred(null);
   };
@@ -314,10 +340,14 @@ function AutofillUI() {
             Do you want to save this password for <strong>{newCred.url}</strong>
             ?
           </div>
+          {saveError && <div className="clyro-banner-error">{saveError}</div>}
           <div className="clyro-banner-actions">
             <button
               className="clyro-btn clyro-btn-secondary"
-              onClick={() => setNewCred(null)}
+              onClick={() => {
+                setNewCred(null);
+                setSaveError(null);
+              }}
             >
               Ignore
             </button>

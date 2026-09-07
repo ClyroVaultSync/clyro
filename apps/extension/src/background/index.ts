@@ -3,7 +3,7 @@ import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getV
 import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
 import { copyToClipboard } from './clipboard';
-import { clearVaultKey } from '../storage/sessionStorage';
+import { clearVaultKey, setPendingCredential, takePendingCredential } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
 import type { VaultItem } from '@clyro/shared-types';
 import './bridge';
@@ -82,6 +82,25 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         const saveResult = await saveVaultItems(nextItems);
         if (saveResult.success) return { success: true, data: { updated: Boolean(duplicate) } };
         return { success: false, error: { code: 'SAVE_NEW_CREDENTIAL_FAILED', message: saveResult.error || 'Failed to save credential.' } };
+      }
+      case 'STASH_PENDING_CREDENTIAL': {
+        await setPendingCredential(message.item);
+        return { success: true };
+      }
+      case 'GET_PENDING_CREDENTIAL': {
+        const pending = await takePendingCredential();
+        if (!pending) return { success: true, data: null };
+
+        // Only worth surfacing if it's actually new or the password changed — same
+        // "same site + same username is an update" rule SAVE_NEW_CREDENTIAL already uses.
+        const existing = await getVaultItems();
+        const known = existing.success && existing.data ? existing.data : [];
+        const match = known.find(
+          (item) => domainMatches(item.url, extractDomain(pending.url)) && item.username === pending.username
+        );
+        if (match && match.password === pending.password) return { success: true, data: null };
+
+        return { success: true, data: { url: pending.url, username: pending.username, password: pending.password } };
       }
       case 'GET_SETUP_STATE': {
         const providerId = await getActiveProviderId();

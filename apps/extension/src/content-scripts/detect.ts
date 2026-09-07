@@ -1,15 +1,15 @@
 import type { BackgroundMessage, BackgroundResponse } from '../background/messages';
 
 /**
- * Non-visual autofill logic: detects login forms, asks the background worker for
- * matching credentials, and detects newly-entered credentials worth saving.
- * Renders nothing itself — dispatches CustomEvents on `window` that a separate
- * UI layer (dropdown / save-prompt) listens for. Keeping detection and rendering
- * decoupled lets the two be built and merged independently.
+ * Non-visual autofill logic: detects login forms, asks the background worker for matching
+ * credentials, and stashes newly-entered credentials worth saving for AutofillUI to pick up.
+ * Renders nothing itself — the dropdown dispatches a CustomEvent on `window` that AutofillUI
+ * listens for; the save-prompt banner instead goes through the background worker's pending-
+ * credential stash (see handleFormSubmit below and AutofillUI's mount effect) since it must
+ * survive a page navigation that a same-page event cannot.
  */
 
 const CREDENTIALS_FOUND_EVENT = 'clyro:credentials-found';
-const NEW_CREDENTIAL_DETECTED_EVENT = 'clyro:new-credential-detected';
 
 interface LoginFieldPair {
   usernameField: HTMLInputElement | null;
@@ -83,22 +83,31 @@ function attachFocusListeners(pair: LoginFieldPair): void {
   }
 }
 
-async function handleFormSubmit(pair: LoginFieldPair): Promise<void> {
+/**
+ * A real form submit starts navigating to the next page immediately, well before an async
+ * round-trip to the background worker (to check whether this is a new credential) could
+ * resolve — so that check, and any UI dispatched from its result, can't happen on this page.
+ * This only stashes the raw values (fire-and-forget); whichever page loads next claims and
+ * shows it, via AutofillUI's own mount-time check (see its comment for why that check lives
+ * there, and why it's the *only* place this stash is consumed). An earlier version of this
+ * also tried an immediate check-and-show here for pages that don't navigate away — but since
+ * consuming the stash is a one-shot read, that immediate attempt could win the race to consume
+ * it while still losing the race to render before an unload that follows shortly after,
+ * silently discarding the credential instead of leaving it for the next page. Deferring
+ * entirely to the next page load is the trade being made instead: reliable for a real
+ * navigation (the reported bug), at the cost of a page that changes state via JavaScript and
+ * never truly navigates away not showing the prompt until the user eventually does navigate.
+ */
+function handleFormSubmit(pair: LoginFieldPair): void {
   const username = pair.usernameField?.value ?? '';
   const password = pair.passwordField.value;
   if (!username || !password) return;
 
-  const existing = await sendMessage({ type: 'FIND_MATCHING_CREDENTIALS', domain: window.location.hostname });
-  const knownItems = existing.success && Array.isArray(existing.data) ? (existing.data as { username: string }[]) : [];
-  const alreadyKnown = knownItems.some((item) => item.username === username);
-
-  if (!alreadyKnown) {
-    window.dispatchEvent(
-      new CustomEvent(NEW_CREDENTIAL_DETECTED_EVENT, {
-        detail: { url: window.location.hostname, username, password, field: pair.passwordField },
-      })
-    );
-  }
+  sendMessage({ type: 'STASH_PENDING_CREDENTIAL', item: { url: window.location.hostname, username, password } }).catch(
+    () => {
+      // Best-effort — if the page is already mid-unload the message may never get a response.
+    }
+  );
 }
 
 const attachedForms = new WeakSet<HTMLFormElement>();
@@ -108,7 +117,7 @@ function attachSubmitListener(pair: LoginFieldPair): void {
   if (!form || attachedForms.has(form)) return;
   attachedForms.add(form);
   form.addEventListener('submit', () => {
-    void handleFormSubmit(pair);
+    handleFormSubmit(pair);
   });
 }
 
