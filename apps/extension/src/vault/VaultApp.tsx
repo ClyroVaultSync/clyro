@@ -2,15 +2,26 @@ import React, { useEffect, useState } from "react";
 import StoragePickerView from "../popup/StoragePickerView";
 import VaultUnlockView from "../popup/VaultUnlockView";
 import CreateVaultView from "../popup/CreateVaultView";
+import MainMenuView from "../popup/MainMenuView";
 import VaultList from "./VaultList";
+
+interface Props {
+  /**
+   * 'tab' (default, used by vault.html) keeps the original linear flow ending
+   * in VaultList. 'popup' (used by the toolbar popup) ends in the OptionWheel
+   * main menu instead — Open Vault from there opens this same component as a
+   * 'tab'.
+   */
+  context?: "popup" | "tab";
+}
 
 /**
  * The whole storage-picker/create/unlock/list state machine, per
  * docs/EXTENSION_HANDOFF.md §8 step 4 — mounted both in the popup and in the
  * full-page vault.html tab that OPEN_VAULT opens. Same component, same
- * messages, two different HTML shells.
+ * messages, diverging only at the tail end based on `context`.
  */
-export default function VaultApp() {
+export default function VaultApp({ context = "tab" }: Props) {
   const [loading, setLoading] = useState(true);
   const [hasProvider, setHasProvider] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -61,8 +72,14 @@ export default function VaultApp() {
   }
 
   if (!isUnlocked) {
+    if (context === "popup") {
+      return <MainMenuView isUnlocked={false} onStatusChange={checkStatus} />;
+    }
     return <VaultUnlockView onUnlockSuccess={checkStatus} />;
   }
 
+  if (context === "popup") {
+    return <MainMenuView isUnlocked={true} onStatusChange={checkStatus} />;
+  }
   return <VaultList onLock={checkStatus} />;
 }
