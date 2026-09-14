@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import OptionWheel, { OptionWheelProps } from './OptionWheel';
+import InteractiveHoverButton from './InteractiveHoverButton';
 
 interface Props {
   items: string[];
@@ -62,20 +63,7 @@ export default function WheelPicker({ items, defaultSelected = 0, onConfirm, whe
           {...wheelProps}
         />
       </div>
-      <button type="button" onClick={handleConfirm} style={confirmButtonStyle}>
-        {'→'} {items[highlightedIndex]}
-      </button>
+      <InteractiveHoverButton onClick={handleConfirm}>{items[highlightedIndex]}</InteractiveHoverButton>
     </div>
   );
 }
-
-const confirmButtonStyle: React.CSSProperties = {
-  padding: '10px',
-  background: '#6366f1',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontWeight: 600,
-  fontSize: '14px',
-};

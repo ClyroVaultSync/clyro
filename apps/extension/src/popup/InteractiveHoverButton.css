@@ -1,0 +1,75 @@
+/* Colors match the website's --color-raised/--color-border/--color-heading/
+   --color-accent/--color-base tokens exactly (apps/website/src/app/globals.css)
+   — the extension has no shared token system, so they're hardcoded here. */
+
+.interactive-hover-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1a1210;
+  padding: 10px 24px;
+  font-family: inherit;
+}
+
+/* The flood: a tiny dot, centered on the button, scaled up massively on
+   hover until it fills the whole (clipped) background with purple. */
+.ihb-dot {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 300ms;
+}
+
+.interactive-hover-button:hover .ihb-dot {
+  transform: translate(-50%, -50%) scale(100.8);
+}
+
+/* Pinned to the button's true center at all times — only its color
+   transitions, so it never shifts to make room for the arrow. */
+.ihb-label {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: #f5f3f1;
+  text-align: center;
+  transition: color 300ms;
+}
+
+.interactive-hover-button:hover .ihb-label {
+  color: #120d0c;
+}
+
+/* Fades in near the right edge independently of the label, so it never
+   competes with the label for centering. */
+.ihb-arrow {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 20px;
+  display: flex;
+  color: #120d0c;
+  opacity: 0;
+  transform: translate(8px, -50%);
+  transition:
+    opacity 300ms,
+    transform 300ms;
+}
+
+.interactive-hover-button:hover .ihb-arrow {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
