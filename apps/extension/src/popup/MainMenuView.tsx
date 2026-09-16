@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import WheelPicker from './WheelPicker';
 import VaultUnlockView from './VaultUnlockView';
+import Shuffle from './Shuffle';
 
 interface Props {
   isUnlocked: boolean;
@@ -106,7 +107,22 @@ export default function MainMenuView({ isUnlocked, onStatusChange }: Props) {
         boxSizing: 'border-box',
       }}
     >
-      <h2 style={{ margin: 0, textAlign: 'center', fontSize: '16px' }}>Clyro</h2>
+      <Shuffle
+        text="Clyro"
+        tag="h2"
+        style={{ margin: 0, fontSize: '12px' }}
+        textAlign="center"
+        shuffleDirection="right"
+        duration={0.35}
+        animationMode="evenodd"
+        shuffleTimes={1}
+        ease="power3.out"
+        stagger={0.03}
+        threshold={0.1}
+        triggerOnce={true}
+        triggerOnHover={true}
+        respectReducedMotion={true}
+      />
 
       {error && (
         <div
