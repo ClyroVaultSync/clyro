@@ -1,5 +1,9 @@
 import React, { useEffect, useState, useMemo } from "react";
 import type { VaultItem } from "@clyro/shared-types";
+import InteractiveHoverButton from "../popup/InteractiveHoverButton";
+import VaultItemRow, { ROW_GRID_COLUMNS } from "./VaultItemRow";
+import { SearchIcon, ChevronDownIcon, ArrowLeftIcon } from "./VaultIcons";
+import "./VaultList.css";
 
 interface Props {
   onLock: () => void;
@@ -123,33 +127,32 @@ export default function VaultList({ onLock }: Props) {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        padding: "16px",
+        padding: "24px",
         boxSizing: "border-box",
+        gap: "20px",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-        }}
-      >
-        <h3 style={{ margin: 0 }}>My Vault</h3>
-        <button
-          onClick={handleLock}
-          style={{
-            background: "#334155",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            padding: "4px 8px",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}
-        >
-          Lock
-        </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <div
+            style={{
+              fontSize: "11px",
+              fontWeight: 600,
+              letterSpacing: "1.5px",
+              color: "#a39c97",
+              textTransform: "uppercase",
+              marginBottom: "4px",
+            }}
+          >
+            Clyro
+          </div>
+          <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 700, color: "#f5f3f1" }}>My Vault</h1>
+        </div>
+        <div style={{ width: compactButtonWidth }}>
+          <InteractiveHoverButton onClick={handleLock} compact>
+            Lock
+          </InteractiveHoverButton>
+        </div>
       </div>
 
       {error && (
@@ -157,10 +160,10 @@ export default function VaultList({ onLock }: Props) {
           style={{
             background: "rgba(239, 68, 68, 0.1)",
             color: "#ef4444",
-            padding: "8px",
-            borderRadius: "4px",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            padding: "10px 12px",
+            borderRadius: "8px",
             fontSize: "12px",
-            marginBottom: "12px",
           }}
         >
           {error}
@@ -175,12 +178,27 @@ export default function VaultList({ onLock }: Props) {
             flexDirection: "column",
             gap: "10px",
             flex: 1,
+            minHeight: 0,
             overflowY: "auto",
+            background: "#1a1210",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            borderRadius: "12px",
+            padding: "20px",
+            boxSizing: "border-box",
           }}
         >
-          <h4 style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
-            Add Credential
-          </h4>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <button
+              type="button"
+              className="vault-icon-btn"
+              onClick={() => setShowAddForm(false)}
+              title="Back to vault"
+              style={{ flexShrink: 0 }}
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <h2 style={{ margin: 0, fontSize: "16px", color: "#f5f3f1" }}>Add Credential</h2>
+          </div>
           <input
             type="text"
             placeholder="Name (e.g. GitHub)"
@@ -213,13 +231,11 @@ export default function VaultList({ onLock }: Props) {
               required
               style={{ ...inputStyle, flex: 1 }}
             />
-            <button
-              type="button"
-              onClick={() => setShowNewPassword(!showNewPassword)}
-              style={iconBtnStyle}
-            >
-              {showNewPassword ? "Hide" : "Show"}
-            </button>
+            <div style={{ width: compactButtonWidth }}>
+              <InteractiveHoverButton onClick={() => setShowNewPassword(!showNewPassword)} compact>
+                {showNewPassword ? "Hide" : "Show"}
+              </InteractiveHoverButton>
+            </div>
           </div>
           <textarea
             placeholder="Notes (optional)"
@@ -230,168 +246,108 @@ export default function VaultList({ onLock }: Props) {
           />
 
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-            <button
-              type="button"
-              onClick={() => setShowAddForm(false)}
-              style={{
-                flex: 1,
-                padding: "10px",
-                background: "transparent",
-                color: "#94a3b8",
-                border: "1px solid #475569",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                flex: 1,
-                padding: "10px",
-                background: "#6366f1",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: saving ? "not-allowed" : "pointer",
-                fontWeight: 600,
-              }}
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
+            <div style={{ flex: 1 }}>
+              <InteractiveHoverButton onClick={() => setShowAddForm(false)}>Cancel</InteractiveHoverButton>
+            </div>
+            <div style={{ flex: 1 }}>
+              <InteractiveHoverButton type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </InteractiveHoverButton>
+            </div>
           </div>
         </form>
       ) : (
         <>
-          <div style={{ marginBottom: "12px" }}>
-            <input
-              type="text"
-              placeholder="Search vault..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
           <div
             style={{
+              background: "#1a1210",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "12px",
               flex: 1,
-              overflowY: "auto",
+              minHeight: 0,
               display: "flex",
               flexDirection: "column",
-              gap: "8px",
+              overflow: "hidden",
             }}
           >
-            {loading ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "20px",
-                  color: "#94a3b8",
-                }}
-              >
-                Loading items...
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "20px",
-                  color: "#94a3b8",
-                }}
-              >
-                {items.length === 0 ? "Vault is empty." : "No results found."}
-              </div>
-            ) : (
-              filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    background: "#1e293b",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    border: "1px solid #334155",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  <div style={{ fontWeight: 600, fontSize: "14px" }}>
-                    {item.name}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "#94a3b8",
-                        fontSize: "12px",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      User: {item.username}
-                    </div>
-                    <button
-                      onClick={() => handleCopy(item.username)}
-                      style={copyBtnStyle}
-                      title="Copy Username"
-                    >
-                      Copy
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div style={{ color: "#94a3b8", fontSize: "12px" }}>
-                      Pass: ••••••••
-                    </div>
-                    {item.password && (
-                      <button
-                        onClick={() => handleCopy(item.password!)}
-                        style={copyBtnStyle}
-                        title="Copy Password"
-                      >
-                        Copy
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div style={{ marginTop: "16px" }}>
-            <button
-              onClick={() => setShowAddForm(true)}
-              disabled={loading}
+            <div
               style={{
-                width: "100%",
-                padding: "10px",
-                background: "#6366f1",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: loading ? "not-allowed" : "pointer",
-                fontWeight: 600,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
-              + Add Credential
-            </button>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "1px",
+                  color: "#a39c97",
+                  textTransform: "uppercase",
+                }}
+              >
+                All Items
+              </div>
+              <div style={{ position: "relative", width: "200px" }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#a39c97",
+                    display: "flex",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <SearchIcon size={14} />
+                </span>
+                <input
+                  type="text"
+                  className="vault-search-input"
+                  placeholder="Search vault..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={searchInputStyle}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: ROW_GRID_COLUMNS,
+                gap: "8px",
+                padding: "10px 16px",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <div style={columnHeaderStyle}>Item Name</div>
+              <div style={columnHeaderStyle}>Password</div>
+              <div style={{ ...columnHeaderStyle, display: "flex", alignItems: "center", gap: "4px" }}>
+                Last Modified <ChevronDownIcon size={11} />
+              </div>
+              <div />
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px" }}>
+              {loading ? (
+                <div style={{ textAlign: "center", padding: "20px", color: "#a39c97" }}>Loading items...</div>
+              ) : filteredItems.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px", color: "#a39c97" }}>
+                  {items.length === 0 ? "Vault is empty." : "No results found."}
+                </div>
+              ) : (
+                filteredItems.map((item) => <VaultItemRow key={item.id} item={item} onCopy={handleCopy} />)
+              )}
+            </div>
           </div>
+
+          <InteractiveHoverButton onClick={() => setShowAddForm(true)} disabled={loading}>
+            Add Credential
+          </InteractiveHoverButton>
         </>
       )}
     </div>
@@ -402,29 +358,24 @@ const inputStyle = {
   width: "100%",
   padding: "10px",
   boxSizing: "border-box" as const,
-  borderRadius: "4px",
-  border: "1px solid #334155",
-  background: "#1e293b",
-  color: "white",
+  borderRadius: "8px",
+  border: "1px solid rgba(255, 255, 255, 0.1)",
+  background: "#120d0c",
+  color: "#f5f3f1",
 };
 
-const iconBtnStyle = {
-  background: "#334155",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  padding: "0 12px",
-  cursor: "pointer",
-  fontSize: "12px",
+const searchInputStyle = {
+  ...inputStyle,
+  padding: "8px 10px 8px 32px",
+  fontSize: "13px",
 };
 
-const copyBtnStyle = {
-  background: "transparent",
-  color: "#6366f1",
-  border: "1px solid #6366f1",
-  borderRadius: "4px",
-  padding: "2px 8px",
-  cursor: "pointer",
+const columnHeaderStyle = {
   fontSize: "11px",
-  marginLeft: "8px",
+  fontWeight: 600,
+  letterSpacing: "0.5px",
+  color: "#a39c97",
+  textTransform: "uppercase" as const,
 };
+
+const compactButtonWidth = "100px";

@@ -1,13 +1,13 @@
 :root {
-  --bg-dark: #0f172a;
-  --bg-card: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
+  --bg-dark: #120d0c;
+  --bg-card: #1a1210;
+  --text-main: #f5f3f1;
+  --text-muted: #a39c97;
+  --primary: #8b5cf6;
+  --primary-hover: #7c4deb;
   --danger: #ef4444;
   --danger-hover: #dc2626;
-  --border: #334155;
+  --border: rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -37,29 +37,7 @@ body {
   font-size: 28px;
   font-weight: 700;
   margin: 0;
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.primary-btn {
-  background-color: var(--primary);
-  color: white;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.primary-btn:hover {
-  background-color: var(--primary-hover);
-}
-
-.primary-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  color: var(--text-main);
 }
 
 .section {
@@ -67,7 +45,6 @@ body {
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 30px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border);
 }
 
@@ -90,7 +67,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background-color: rgba(15, 23, 42, 0.5);
+  background-color: var(--bg-dark);
   border-radius: 8px;
   border: 1px solid var(--border);
   transition: transform 0.2s ease, border-color 0.2s ease;
@@ -117,24 +94,6 @@ body {
   color: var(--text-muted);
 }
 
-.revoke-btn {
-  background-color: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.revoke-btn:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
 .loading-state {
   text-align: center;
   padding: 40px;
@@ -147,7 +106,7 @@ body {
   text-align: center;
   padding: 30px;
   color: var(--text-muted);
-  background-color: rgba(15, 23, 42, 0.3);
+  background-color: var(--bg-dark);
   border-radius: 8px;
   border: 1px dashed var(--border);
 }

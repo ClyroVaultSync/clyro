@@ -3,7 +3,18 @@ import './InteractiveHoverButton.css';
 
 interface Props {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
+  type?: 'button' | 'submit';
+  disabled?: boolean;
+  /**
+   * The default padding/arrow-inset is tuned for full-width buttons with
+   * room to spare between the centered label and the right-edge arrow. In
+   * a narrow container (e.g. a 100px-wide wrapper) that same spacing puts
+   * the arrow right up against short labels like "Lock" or "Copy" — this
+   * switches to tighter padding and a closer-in arrow inset that still
+   * leaves a real gap at that width.
+   */
+  compact?: boolean;
 }
 
 // Plain-CSS port of the website's InteractiveHoverButton
@@ -13,9 +24,16 @@ interface Props {
 // the button's true center at all times (only its color transitions) instead
 // of sliding as part of a text+arrow group — the labels here are long enough
 // ("Change Storage Options") that off-center sliding text looked wrong.
-export default function InteractiveHoverButton({ children, onClick }: Props) {
+export default function InteractiveHoverButton({
+  children,
+  onClick,
+  type = 'button',
+  disabled = false,
+  compact = false,
+}: Props) {
+  const className = `interactive-hover-button${compact ? ' interactive-hover-button--compact' : ''}`;
   return (
-    <button type="button" className="interactive-hover-button" onClick={onClick}>
+    <button type={type} className={className} onClick={onClick} disabled={disabled}>
       <span className="ihb-dot" />
       <span className="ihb-label">{children}</span>
       <span className="ihb-arrow">

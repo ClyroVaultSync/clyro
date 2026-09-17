@@ -1,0 +1,36 @@
+/* Locked design tokens (knowledge/Features/Website UI Redesign.md), same
+   values InteractiveHoverButton.css hardcodes for this extension since it
+   has no shared token system. */
+
+.vault-row {
+  transition: background-color 200ms ease-out;
+}
+
+.vault-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.vault-search-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.vault-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 6px;
+  color: #a39c97;
+  cursor: pointer;
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+.vault-icon-btn:hover {
+  color: #8b5cf6;
+  background-color: rgba(139, 92, 246, 0.1);
+}

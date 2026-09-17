@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import WheelPicker from "./WheelPicker";
+import InteractiveHoverButton from "./InteractiveHoverButton";
 
 interface Props {
   onProviderConnected: () => void;
@@ -72,9 +73,7 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
         <p style={{ margin: 0, textAlign: "center", color: "#a0aec0", fontSize: "14px" }}>
           This storage provider isn't available yet.
         </p>
-        <button type="button" onClick={() => setView("choose")} style={linkButtonStyle}>
-          Back
-        </button>
+        <InteractiveHoverButton onClick={() => setView("choose")}>Back</InteractiveHoverButton>
       </div>
     );
   }
@@ -98,12 +97,10 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
           required
           style={inputStyle}
         />
-        <button type="submit" disabled={loading} style={primaryButtonStyle}>
+        <InteractiveHoverButton type="submit" disabled={loading}>
           {loading ? "Connecting..." : "Connect"}
-        </button>
-        <button type="button" onClick={() => setView("choose")} style={linkButtonStyle}>
-          Back
-        </button>
+        </InteractiveHoverButton>
+        <InteractiveHoverButton onClick={() => setView("choose")}>Back</InteractiveHoverButton>
       </form>
     </div>
   );
@@ -117,23 +114,4 @@ const inputStyle = {
   border: "1px solid #334155",
   background: "#1e293b",
   color: "white",
-};
-
-const primaryButtonStyle = {
-  padding: "10px",
-  background: "#6366f1",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const linkButtonStyle = {
-  background: "transparent",
-  border: "none",
-  color: "#94a3b8",
-  cursor: "pointer",
-  fontSize: "14px",
-  textDecoration: "underline",
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import InteractiveHoverButton from "../popup/InteractiveHoverButton";
 import "./OptionsApp.css";
 
 interface SetupState {
@@ -106,17 +107,21 @@ export function OptionsApp() {
                 {state?.baseUrl && <span className="item-meta">{state.baseUrl}</span>}
               </div>
               {state?.providerId && (
-                <button className="revoke-btn" onClick={handleDisconnect}>
-                  Disconnect
-                </button>
+                <div style={{ width: "160px" }}>
+                  <InteractiveHoverButton onClick={handleDisconnect} compact>
+                    Disconnect
+                  </InteractiveHoverButton>
+                </div>
               )}
             </div>
           </div>
 
           {state?.providerId && (
-            <button className="primary-btn" style={{ marginTop: "16px" }} onClick={handleExport} disabled={exporting}>
-              {exporting ? "Exporting..." : "Export Encrypted Vault (.clyro)"}
-            </button>
+            <div style={{ marginTop: "16px" }}>
+              <InteractiveHoverButton onClick={handleExport} disabled={exporting}>
+                {exporting ? "Exporting..." : "Export Encrypted Vault (.clyro)"}
+              </InteractiveHoverButton>
+            </div>
           )}
         </div>
       )}

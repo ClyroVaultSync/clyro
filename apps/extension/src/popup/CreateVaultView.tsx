@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import InteractiveHoverButton from "./InteractiveHoverButton";
 
 interface Props {
   onVaultCreated: () => void;
@@ -133,9 +134,9 @@ export default function CreateVaultView({ onVaultCreated }: Props) {
             required
             style={inputStyle}
           />
-          <button type="submit" disabled={loading} style={primaryButtonStyle(loading)}>
+          <InteractiveHoverButton type="submit" disabled={loading}>
             {loading ? "Creating..." : "Create Vault"}
-          </button>
+          </InteractiveHoverButton>
         </form>
       ) : (
         <form
@@ -157,22 +158,20 @@ export default function CreateVaultView({ onVaultCreated }: Props) {
             required
             style={inputStyle}
           />
-          <button type="submit" disabled={loading} style={primaryButtonStyle(loading)}>
+          <InteractiveHoverButton type="submit" disabled={loading}>
             {loading ? "Restoring..." : "Restore Vault"}
-          </button>
+          </InteractiveHoverButton>
         </form>
       )}
 
-      <button
-        type="button"
+      <InteractiveHoverButton
         onClick={() => {
           setMode(mode === "create" ? "import" : "create");
           setError("");
         }}
-        style={linkButtonStyle}
       >
         {mode === "create" ? "Restore from a backup instead" : "Create a new vault instead"}
-      </button>
+      </InteractiveHoverButton>
     </div>
   );
 }
@@ -185,25 +184,4 @@ const inputStyle = {
   border: "1px solid #334155",
   background: "#1e293b",
   color: "white",
-};
-
-const primaryButtonStyle = (loading: boolean) => ({
-  padding: "10px",
-  background: "#6366f1",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  cursor: loading ? "not-allowed" : "pointer",
-  fontWeight: 600,
-  marginTop: "8px",
-});
-
-const linkButtonStyle = {
-  background: "transparent",
-  border: "none",
-  color: "#94a3b8",
-  cursor: "pointer",
-  fontSize: "13px",
-  textDecoration: "underline",
-  marginTop: "4px",
 };

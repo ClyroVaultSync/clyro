@@ -18,23 +18,38 @@
   font-family: inherit;
 }
 
-/* The flood: a tiny dot, centered on the button, scaled up massively on
-   hover until it fills the whole (clipped) background with purple. */
+/* The flood: a circular reveal, centered on the button, that grows to fill
+   the whole background with purple on hover. Previously done by scaling an
+   8px dot up ~100x and relying on the parent's overflow:hidden to clip it —
+   that extreme a transform scale is a known source of GPU-compositing seam
+   artifacts (a faint residual rim that doesn't fully clear after the
+   transition). clip-path's circle() percentage radius resolves against the
+   box's own diagonal, so 75% reaches every corner regardless of the
+   button's width/height — no per-button-size tuning, no huge scale factor. */
 .ihb-dot {
   position: absolute;
   z-index: 0;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  inset: 0;
   background: #8b5cf6;
-  transform: translate(-50%, -50%) scale(0);
-  transition: transform 300ms;
+  clip-path: circle(0% at 50% 50%);
+  transition: clip-path 300ms;
 }
 
-.interactive-hover-button:hover .ihb-dot {
-  transform: translate(-50%, -50%) scale(100.8);
+.interactive-hover-button:hover:not(:disabled) .ihb-dot {
+  clip-path: circle(75% at 50% 50%);
+}
+
+.interactive-hover-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Narrower padding and a closer-in arrow inset for small/compact buttons
+   (e.g. a 100px-wide wrapper) — the default 24px padding + 20px arrow inset
+   leaves almost no gap between a short centered label and the arrow at
+   that width. */
+.interactive-hover-button--compact {
+  padding: 10px 14px;
 }
 
 /* Pinned to the button's true center at all times — only its color
@@ -49,7 +64,7 @@
   transition: color 300ms;
 }
 
-.interactive-hover-button:hover .ihb-label {
+.interactive-hover-button:hover:not(:disabled) .ihb-label {
   color: #120d0c;
 }
 
@@ -69,7 +84,11 @@
     transform 300ms;
 }
 
-.interactive-hover-button:hover .ihb-arrow {
+.interactive-hover-button:hover:not(:disabled) .ihb-arrow {
   opacity: 1;
   transform: translate(0, -50%);
+}
+
+.interactive-hover-button--compact .ihb-arrow {
+  right: 8px;
 }

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import InteractiveHoverButton from './InteractiveHoverButton';
+import TextType from './TextType';
 
 interface Props {
   onUnlockSuccess: () => void;
@@ -31,9 +33,12 @@ export default function VaultUnlockView({ onUnlockSuccess }: Props) {
   return (
     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <h2 style={{ margin: 0, textAlign: 'center' }}>Vault Locked</h2>
-      <p style={{ margin: 0, textAlign: 'center', color: '#a0aec0', fontSize: '14px' }}>
-        Enter your Master Password to decrypt your vault.
-      </p>
+      <TextType
+        as="p"
+        text="Enter your Master Password to decrypt your vault."
+        loop={false}
+        style={{ margin: 0, textAlign: 'center', color: '#a0aec0', fontSize: '14px', width: '100%' }}
+      />
       
       {error && (
         <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '6px', fontSize: '14px' }}>
@@ -52,13 +57,9 @@ export default function VaultUnlockView({ onUnlockSuccess }: Props) {
             style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #334155', background: '#1e293b', color: 'white' }}
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ padding: '10px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, marginTop: '8px' }}
-        >
+        <InteractiveHoverButton type="submit" disabled={loading}>
           {loading ? 'Decrypting...' : 'Unlock Vault'}
-        </button>
+        </InteractiveHoverButton>
       </form>
     </div>
   );
