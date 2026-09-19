@@ -59,6 +59,19 @@ export default function VaultApp({ context = "tab" }: Props) {
     checkStatus();
   }, []);
 
+  // Locking or disconnecting elsewhere (e.g. from the popup, while this vault.html
+  // tab is still open) must drop whatever this tab has already decrypted into
+  // `VaultList`'s state — otherwise the plaintext stays visible here indefinitely.
+  // checkStatus() re-derives the right screen, unmounting VaultList (and its state
+  // with it) whenever the vault is no longer unlocked and connected.
+  useEffect(() => {
+    const listener = (message: { type?: string }) => {
+      if (message?.type === "VAULT_LOCKED") checkStatus();
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
   if (loading) {
     return <div style={{ padding: "20px", textAlign: "center" }}>Loading...</div>;
   }

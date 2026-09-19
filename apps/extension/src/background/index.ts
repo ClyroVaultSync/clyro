@@ -1,6 +1,6 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
 import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
+import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig, connectGoogleDrive, clearGoogleDriveConfig } from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
 import { copyToClipboard } from './clipboard';
 import { clearVaultKey, setPendingCredential, takePendingCredential } from '../storage/sessionStorage';
@@ -9,6 +9,33 @@ import type { VaultItem } from '@clyro/shared-types';
 import './bridge';
 
 // Note: Ensure manifest.json "background.service_worker" points to the compiled output of this file.
+
+/**
+ * Tells any other open extension page (e.g. a vault.html tab left open in another
+ * window) that the vault just became inaccessible here, so it can drop whatever
+ * decrypted items it's holding in memory instead of continuing to display them.
+ * Rejects harmlessly when nothing is listening — that's not an error case.
+ */
+function broadcastVaultLocked(): void {
+  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+  chrome.runtime.sendMessage({ type: 'VAULT_LOCKED' }).catch(() => {});
+}
+
+/**
+ * Force-closes any open vault.html tab when the storage provider changes — that
+ * tab's whole context (which provider, which decrypted vault) is now stale, and
+ * closing it outright is simpler and more reliable than asking it to update itself:
+ * it works even if that tab is still running an older build of the extension's
+ * JS than the one that just ran this code (confirmed happening in practice —
+ * reloading the extension does not refresh the JS already running in a tab that
+ * was open before the reload).
+ */
+async function closeOpenVaultTabs(): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query) return;
+  const tabs = await chrome.tabs.query({ url: `${chrome.runtime.getURL('vault.html')}*` });
+  const tabIds = tabs.map((tab) => tab.id).filter((id): id is number => id !== undefined);
+  if (tabIds.length > 0) await chrome.tabs.remove(tabIds);
+}
 
 if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((message: BackgroundMessage, _sender, sendResponse) => {
@@ -32,6 +59,7 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
       }
       case 'LOCK_VAULT': {
         await lockVault();
+        broadcastVaultLocked();
         return { success: true };
       }
       case 'GET_VAULT_LOCK_STATUS': {
@@ -112,10 +140,17 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         if (result.success) return { success: true };
         return { success: false, error: { code: 'PAIRING_FAILED', message: result.error || 'Failed to pair with the Local Sync Server.' } };
       }
+      case 'CONNECT_GOOGLE_DRIVE': {
+        const result = await connectGoogleDrive();
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'GOOGLE_DRIVE_CONNECT_FAILED', message: result.error || 'Failed to connect to Google Drive.' } };
+      }
       case 'CLEAR_PROVIDER': {
         await clearLocalConfig();
+        await clearGoogleDriveConfig();
         await clearVaultKey();
         await clearCachedVaultBlob();
+        await closeOpenVaultTabs();
         return { success: true };
       }
       case 'EXPORT_VAULT': {

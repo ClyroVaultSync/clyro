@@ -9,7 +9,7 @@ interface Props {
 const DEFAULT_LOCAL_URL = "http://localhost:8080";
 const PROVIDER_ITEMS = ["Local Sync Server", "Google Drive", "Dropbox"];
 
-type View = "choose" | "local-form" | "coming-soon";
+type View = "choose" | "local-form" | "connecting-google-drive" | "coming-soon";
 
 export default function StoragePickerView({ onProviderConnected }: Props) {
   const [view, setView] = useState<View>("choose");
@@ -39,9 +39,33 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
     }
   };
 
+  const handleConnectGoogleDrive = async () => {
+    setView("connecting-google-drive");
+    setError("");
+
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "CONNECT_GOOGLE_DRIVE" });
+      if (res.success) {
+        onProviderConnected();
+      } else {
+        setError(res.error?.message || "Failed to connect to Google Drive.");
+        setView("choose");
+      }
+    } catch {
+      setError("Communication error with background script.");
+      setView("choose");
+    }
+  };
+
   const handleChoice = (index: number) => {
     setError("");
-    setView(index === 0 ? "local-form" : "coming-soon");
+    if (index === 0) {
+      setView("local-form");
+    } else if (index === 1) {
+      handleConnectGoogleDrive();
+    } else {
+      setView("coming-soon");
+    }
   };
 
   if (view === "choose") {
@@ -61,7 +85,20 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
           Clyro has no account of its own. Pick where your encrypted vault should live — this can be
           changed later via encrypted export/import.
         </p>
+        {error && (
+          <div style={{ background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", padding: "12px", borderRadius: "6px", fontSize: "14px" }}>
+            {error}
+          </div>
+        )}
         <WheelPicker items={PROVIDER_ITEMS} onConfirm={handleChoice} style={{ marginTop: "-48px" }} />
+      </div>
+    );
+  }
+
+  if (view === "connecting-google-drive") {
+    return (
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        Connecting to Google Drive...
       </div>
     );
   }

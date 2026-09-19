@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
-import { createVault, unlockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig } from '../providers';
+import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
+import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig, connectGoogleDrive, clearGoogleDriveConfig } from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
 import { clearVaultKey } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
@@ -22,6 +22,8 @@ vi.mock('../providers', () => ({
   initiatePairing: vi.fn(),
   clearLocalConfig: vi.fn(),
   getLocalConfig: vi.fn(),
+  connectGoogleDrive: vi.fn(),
+  clearGoogleDriveConfig: vi.fn(),
 }));
 
 vi.mock('../services/exportImport', () => ({
@@ -38,6 +40,18 @@ vi.mock('../storage/localStorage', () => ({
 }));
 
 vi.mock('./bridge', () => ({}));
+
+global.chrome = {
+  runtime: {
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    getURL: vi.fn((path: string) => `chrome-extension://test-id/${path}`),
+  },
+  tabs: {
+    query: vi.fn().mockResolvedValue([]),
+    remove: vi.fn().mockResolvedValue(undefined),
+  },
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+} as any;
 
 describe('Background message routing', () => {
   beforeEach(() => {
@@ -198,12 +212,51 @@ describe('Background message routing', () => {
     });
   });
 
-  it('CLEAR_PROVIDER clears the provider config, vault key, and cache', async () => {
+  it('CONNECT_GOOGLE_DRIVE connects successfully', async () => {
+    (connectGoogleDrive as Mock).mockResolvedValue({ success: true });
+
+    const response = await handleMessage({ type: 'CONNECT_GOOGLE_DRIVE' });
+
+    expect(connectGoogleDrive).toHaveBeenCalled();
+    expect(response).toEqual({ success: true });
+  });
+
+  it('CONNECT_GOOGLE_DRIVE surfaces a connect failure', async () => {
+    (connectGoogleDrive as Mock).mockResolvedValue({ success: false, error: 'User cancelled.' });
+
+    const response = await handleMessage({ type: 'CONNECT_GOOGLE_DRIVE' });
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'GOOGLE_DRIVE_CONNECT_FAILED', message: 'User cancelled.' },
+    });
+  });
+
+  it('CLEAR_PROVIDER clears both provider configs, vault key, and cache, and closes open vault tabs', async () => {
+    (chrome.tabs.query as Mock).mockResolvedValueOnce([{ id: 42 }, { id: 43 }]);
+
     const response = await handleMessage({ type: 'CLEAR_PROVIDER' });
 
     expect(clearLocalConfig).toHaveBeenCalled();
+    expect(clearGoogleDriveConfig).toHaveBeenCalled();
     expect(clearVaultKey).toHaveBeenCalled();
     expect(clearCachedVaultBlob).toHaveBeenCalled();
+    expect(chrome.tabs.query).toHaveBeenCalledWith({ url: expect.stringContaining('vault.html') });
+    expect(chrome.tabs.remove).toHaveBeenCalledWith([42, 43]);
+    expect(response).toEqual({ success: true });
+  });
+
+  it('CLEAR_PROVIDER does not try to close tabs when none are open', async () => {
+    await handleMessage({ type: 'CLEAR_PROVIDER' });
+
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+  });
+
+  it('LOCK_VAULT locks the vault and broadcasts VAULT_LOCKED to other extension pages', async () => {
+    const response = await handleMessage({ type: 'LOCK_VAULT' });
+
+    expect(lockVault).toHaveBeenCalled();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'VAULT_LOCKED' });
     expect(response).toEqual({ success: true });
   });
 

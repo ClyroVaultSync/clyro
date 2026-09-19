@@ -7,11 +7,19 @@
     "storage",
     "tabs",
     "offscreen",
-    "clipboardWrite"
+    "clipboardWrite",
+    "identity"
   ],
   "host_permissions": [
-    "http://localhost/*"
+    "http://localhost/*",
+    "https://www.googleapis.com/*"
   ],
+  "oauth2": {
+    "client_id": "421177655752-94p7c7pajujg9t8qilh7n4482kirlppo.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata"
+    ]
+  },
   "externally_connectable": {
     "matches": [
       "https://clyro.app/*",
