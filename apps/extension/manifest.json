@@ -12,7 +12,9 @@
   ],
   "host_permissions": [
     "http://localhost/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://api.dropboxapi.com/*",
+    "https://content.dropboxapi.com/*"
   ],
   "oauth2": {
     "client_id": "421177655752-94p7c7pajujg9t8qilh7n4482kirlppo.apps.googleusercontent.com",

@@ -1,6 +1,15 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
 import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig, connectGoogleDrive, clearGoogleDriveConfig } from '../providers';
+import {
+  getActiveProviderId,
+  initiatePairing,
+  clearLocalConfig,
+  getLocalConfig,
+  connectGoogleDrive,
+  clearGoogleDriveConfig,
+  connectDropbox,
+  clearDropboxConfig,
+} from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
 import { copyToClipboard } from './clipboard';
 import { clearVaultKey, setPendingCredential, takePendingCredential } from '../storage/sessionStorage';
@@ -145,9 +154,15 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         if (result.success) return { success: true };
         return { success: false, error: { code: 'GOOGLE_DRIVE_CONNECT_FAILED', message: result.error || 'Failed to connect to Google Drive.' } };
       }
+      case 'CONNECT_DROPBOX': {
+        const result = await connectDropbox();
+        if (result.success) return { success: true };
+        return { success: false, error: { code: 'DROPBOX_CONNECT_FAILED', message: result.error || 'Failed to connect to Dropbox.' } };
+      }
       case 'CLEAR_PROVIDER': {
         await clearLocalConfig();
         await clearGoogleDriveConfig();
+        await clearDropboxConfig();
         await clearVaultKey();
         await clearCachedVaultBlob();
         await closeOpenVaultTabs();

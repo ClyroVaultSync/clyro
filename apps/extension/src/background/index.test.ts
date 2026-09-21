@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
 import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
-import { getActiveProviderId, initiatePairing, clearLocalConfig, getLocalConfig, connectGoogleDrive, clearGoogleDriveConfig } from '../providers';
+import {
+  getActiveProviderId,
+  initiatePairing,
+  clearLocalConfig,
+  getLocalConfig,
+  connectGoogleDrive,
+  clearGoogleDriveConfig,
+  connectDropbox,
+  clearDropboxConfig,
+} from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
 import { clearVaultKey } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
@@ -24,6 +33,8 @@ vi.mock('../providers', () => ({
   getLocalConfig: vi.fn(),
   connectGoogleDrive: vi.fn(),
   clearGoogleDriveConfig: vi.fn(),
+  connectDropbox: vi.fn(),
+  clearDropboxConfig: vi.fn(),
 }));
 
 vi.mock('../services/exportImport', () => ({
@@ -232,13 +243,34 @@ describe('Background message routing', () => {
     });
   });
 
-  it('CLEAR_PROVIDER clears both provider configs, vault key, and cache, and closes open vault tabs', async () => {
+  it('CONNECT_DROPBOX connects successfully', async () => {
+    (connectDropbox as Mock).mockResolvedValue({ success: true });
+
+    const response = await handleMessage({ type: 'CONNECT_DROPBOX' });
+
+    expect(connectDropbox).toHaveBeenCalled();
+    expect(response).toEqual({ success: true });
+  });
+
+  it('CONNECT_DROPBOX surfaces a connect failure', async () => {
+    (connectDropbox as Mock).mockResolvedValue({ success: false, error: 'User cancelled.' });
+
+    const response = await handleMessage({ type: 'CONNECT_DROPBOX' });
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'DROPBOX_CONNECT_FAILED', message: 'User cancelled.' },
+    });
+  });
+
+  it('CLEAR_PROVIDER clears all provider configs, vault key, and cache, and closes open vault tabs', async () => {
     (chrome.tabs.query as Mock).mockResolvedValueOnce([{ id: 42 }, { id: 43 }]);
 
     const response = await handleMessage({ type: 'CLEAR_PROVIDER' });
 
     expect(clearLocalConfig).toHaveBeenCalled();
     expect(clearGoogleDriveConfig).toHaveBeenCalled();
+    expect(clearDropboxConfig).toHaveBeenCalled();
     expect(clearVaultKey).toHaveBeenCalled();
     expect(clearCachedVaultBlob).toHaveBeenCalled();
     expect(chrome.tabs.query).toHaveBeenCalledWith({ url: expect.stringContaining('vault.html') });

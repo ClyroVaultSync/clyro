@@ -9,7 +9,7 @@ interface Props {
 const DEFAULT_LOCAL_URL = "http://localhost:8080";
 const PROVIDER_ITEMS = ["Local Sync Server", "Google Drive", "Dropbox"];
 
-type View = "choose" | "local-form" | "connecting-google-drive" | "coming-soon";
+type View = "choose" | "local-form" | "connecting-google-drive" | "connecting-dropbox";
 
 export default function StoragePickerView({ onProviderConnected }: Props) {
   const [view, setView] = useState<View>("choose");
@@ -57,6 +57,24 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
     }
   };
 
+  const handleConnectDropbox = async () => {
+    setView("connecting-dropbox");
+    setError("");
+
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "CONNECT_DROPBOX" });
+      if (res.success) {
+        onProviderConnected();
+      } else {
+        setError(res.error?.message || "Failed to connect to Dropbox.");
+        setView("choose");
+      }
+    } catch {
+      setError("Communication error with background script.");
+      setView("choose");
+    }
+  };
+
   const handleChoice = (index: number) => {
     setError("");
     if (index === 0) {
@@ -64,7 +82,7 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
     } else if (index === 1) {
       handleConnectGoogleDrive();
     } else {
-      setView("coming-soon");
+      handleConnectDropbox();
     }
   };
 
@@ -103,14 +121,10 @@ export default function StoragePickerView({ onProviderConnected }: Props) {
     );
   }
 
-  if (view === "coming-soon") {
+  if (view === "connecting-dropbox") {
     return (
-      <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-        <h2 style={{ margin: 0, textAlign: "center" }}>Coming Soon</h2>
-        <p style={{ margin: 0, textAlign: "center", color: "#a0aec0", fontSize: "14px" }}>
-          This storage provider isn't available yet.
-        </p>
-        <InteractiveHoverButton onClick={() => setView("choose")}>Back</InteractiveHoverButton>
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        Connecting to Dropbox...
       </div>
     );
   }

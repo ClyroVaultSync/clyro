@@ -13,6 +13,7 @@ export type BackgroundMessage =
   | { type: 'GET_SETUP_STATE' }
   | { type: 'SET_LOCAL_PROVIDER'; baseUrl: string }
   | { type: 'CONNECT_GOOGLE_DRIVE' }
+  | { type: 'CONNECT_DROPBOX' }
   | { type: 'CLEAR_PROVIDER' }
   | { type: 'EXPORT_VAULT' }
   | { type: 'IMPORT_VAULT'; fileContents: string; masterPassword: string }

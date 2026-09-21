@@ -329,7 +329,7 @@ OAuth via `chrome.identity`; the vault is a single file in the user's Drive `app
 
 ### DropboxProvider
 
-Same shape via Dropbox's file API. Dropbox's upload endpoint supports a true atomic compare-and-swap (`mode: update` + `rev`), so conflicts are rejected at write time rather than requiring a conflict-copy fallback.
+Same shape via Dropbox's file API. Dropbox's upload endpoint supports a true atomic compare-and-swap (`mode: update` + `rev`), so conflicts are rejected at write time rather than requiring a conflict-copy fallback. Unlike Google Drive, Dropbox is not a native `chrome.identity.getAuthToken` provider — auth goes through `chrome.identity.launchWebAuthFlow` with PKCE (a public client, no client secret), and the resulting refresh token is stored so the access token can be silently refreshed without re-prompting the user.
 
 ## Password Capture
 
