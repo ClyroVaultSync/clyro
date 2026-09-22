@@ -285,7 +285,7 @@ Responsibilities include:
 - Coordinating synchronization via the active Sync Provider
 - Coordinating export / import
 
-The Vault Manager never talks to a storage backend directly — it always goes through `getActiveProvider()`. This is what lets `createVault`, `unlockVault`, `lockVault`, `getVaultItems`, and `saveVaultItems` stay identical regardless of which storage provider is active.
+The Vault Manager never talks to a storage backend directly — it always goes through `getActiveProvider()`. This is what lets `createVault`, `unlockVault`, `lockVault`, `getVaultItems`, and `applyVaultChange` stay identical regardless of which storage provider is active.
 
 ## Crypto Engine
 
@@ -325,11 +325,13 @@ Talks to the Local Sync Server over `http://localhost:PORT`, authenticated with 
 
 ### GoogleDriveProvider
 
-OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. Because of this, a version mismatch on write is handled by writing a **conflict copy** rather than silently overwriting — see [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
+OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. `updateVault()` therefore re-reads the stored version immediately before writing and returns `CONFLICT` on a mismatch, leaving the retry to `applyVaultChange()`. A small read-then-write race remains that Drive cannot close. See [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
+
+Drive previously wrote a timestamped **conflict copy** file on a mismatch. That was removed once retry existed: the copy landed in the app-only `appDataFolder`, which the user cannot browse and the extension has no UI to restore from, so it was not a recovery path in practice — only an undiscoverable file accumulating on every conflict.
 
 ### DropboxProvider
 
-Same shape via Dropbox's file API. Dropbox's upload endpoint supports a true atomic compare-and-swap (`mode: update` + `rev`), so conflicts are rejected at write time rather than requiring a conflict-copy fallback. Unlike Google Drive, Dropbox is not a native `chrome.identity.getAuthToken` provider — auth goes through `chrome.identity.launchWebAuthFlow` with PKCE (a public client, no client secret), and the resulting refresh token is stored so the access token can be silently refreshed without re-prompting the user.
+Same shape via Dropbox's file API. Dropbox's upload endpoint supports a true atomic compare-and-swap (`mode: update` + `rev`), so a concurrent write is rejected at write time. `updateVault()` additionally compares `vaultVersion` before uploading: the `rev` precondition alone only guards the provider's own download-then-upload window, and would accept a write computed against a version that has since moved. Unlike Google Drive, Dropbox is not a native `chrome.identity.getAuthToken` provider — auth goes through `chrome.identity.launchWebAuthFlow` with PKCE (a public client, no client secret), and the resulting refresh token is stored so the access token can be silently refreshed without re-prompting the user.
 
 ## Password Capture
 
@@ -669,7 +671,7 @@ Clyro uses a **local-first synchronization model**: the extension owns the autho
 1. The vault is modified inside the extension.
 2. The updated vault is encrypted locally.
 3. The encrypted vault is sent to the active Storage Provider (`updateVault`), including the current `vaultVersion`.
-4. The Storage Provider stores the encrypted vault and increments its version (or, for Google Drive on a version mismatch, writes a conflict copy — see [GoogleDriveProvider](#googledriveprovider)).
+4. The Storage Provider stores the encrypted vault and increments its version, or rejects the write as a conflict — in which case the extension re-applies the change to the newer vault and writes again (see [Conflict Resolution](#conflict-resolution)).
 5. Other devices connected to the same Storage Provider detect a newer vault version on their next `getVault()` call.
 6. The encrypted vault is fetched and decrypted locally on that device.
 
@@ -691,10 +693,16 @@ Version 1.0 uses **optimistic concurrency via `vaultVersion`**:
 
 - A write includes the version it was based on.
 - If the stored version has since moved (another device wrote first), the write is rejected.
-- **Local Sync Server and Dropbox**: the provider enforces this atomically (SQLite transaction / Dropbox `rev`), and the extension re-fetches and retries.
-- **Google Drive**: no atomic precondition exists, so a version mismatch on write produces a **conflict copy** rather than silently overwriting or losing data. The user resolves the conflict by choosing which copy to keep.
+- **Local Sync Server and Dropbox**: the provider enforces this atomically (SQLite transaction / Dropbox `rev`).
+- **Google Drive**: no atomic precondition exists, so `GoogleDriveProvider` re-reads the stored version immediately before writing and reports the conflict itself. A small race remains that Drive cannot close.
 
-This approach prioritizes not losing data over automatic merging. Future versions may introduce field-level merge or conflict history.
+A rejected write is retried automatically rather than shown to the user. `applyVaultChange()` in `background/vaultManager.ts` re-fetches the current vault, re-applies the change, and writes again, up to three attempts.
+
+What makes that safe is that a save carries **the change** (an upsert of specific items, or a delete of specific ids) rather than a replacement item list. The extension therefore never writes back a list assembled from a stale read, so a concurrent write from another device survives untouched — it is present in the vault each attempt re-fetches. Conflicting edits to the *same* item still resolve last-write-wins.
+
+`applyVaultChange()` also decrypts the stored vault before replacing it, so a vault encrypted under a different master password is refused rather than overwritten.
+
+This approach prioritizes not losing data over merging conflicting edits to a single item. Future versions may introduce field-level merge or conflict history.
 
 # Offline Synchronization
 
@@ -858,7 +866,7 @@ Technology decisions should remain consistent across the project unless a docume
 | Storage Provider Decryption | Never |
 | Offline Support | Full, via local encrypted cache |
 | Synchronization | Automatic, against the single active provider |
-| Conflict Resolution | Optimistic concurrency (`vaultVersion`); conflict copy on Google Drive mismatch |
+| Conflict Resolution | Optimistic concurrency (`vaultVersion`); rejected writes re-applied to the newer vault and retried automatically |
 | Recovery | Encrypted export/import (`.clyro` file) — no account, no password reset |
 | Password Generator | User-configurable, also available standalone on the website |
 | Auto Login | Optional (disabled by default) |

@@ -221,9 +221,12 @@ async function uploadFile(path: string, mode: 'add' | { tag: 'update'; rev: stri
  * Talks to the Dropbox file API, storing the vault as a single file in the app's
  * sandboxed App Folder (docs/ARCHITECTURE.md "Vault Synchronization"). Unlike
  * Google Drive, Dropbox's upload endpoint supports a true atomic compare-and-swap
- * (`mode: update` + `rev`), so a stale write is rejected by Dropbox itself —
- * updateVault() never needs to write a conflict-copy file the way
- * GoogleDriveProvider does. See knowledge/Features/Local-First Architecture.md.
+ * (`mode: update` + `rev`), so a write racing another is rejected by Dropbox itself
+ * rather than by a check this provider performs. updateVault() still compares
+ * `vaultVersion` as well, because `rev` alone cannot tell whether the caller's
+ * version was computed against the revision being replaced. Either rejection
+ * surfaces as CONFLICT, which vaultManager's applyVaultChange() re-applies and
+ * retries. See knowledge/Features/Local-First Architecture.md.
  */
 export class DropboxProvider implements SyncProvider {
   id = 'dropbox' as const;
@@ -250,6 +253,16 @@ export class DropboxProvider implements SyncProvider {
       const current = await downloadFile(VAULT_FILE_PATH);
       if (!current) {
         return { success: false, error: { code: 'NOT_FOUND', message: 'No vault exists on Dropbox yet.' } };
+      }
+
+      // The `rev` compare-and-swap below only guards this download→upload window; it
+      // says nothing about whether the caller's vaultVersion was computed from this
+      // same revision. Without this check a write based on a version that has since
+      // moved uploads cleanly against a current `rev` and silently overwrites the
+      // device that moved it — the version check is what turns that into a conflict
+      // the caller can re-fetch and retry against.
+      if (current.payload.vaultVersion >= payload.vaultVersion) {
+        return { success: false, error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; please refresh and try again.' } };
       }
 
       await uploadFile(VAULT_FILE_PATH, { tag: 'update', rev: current.rev }, { ...payload, vaultSalt: current.payload.vaultSalt });

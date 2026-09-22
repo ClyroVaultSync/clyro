@@ -282,8 +282,9 @@ Error Responses:
 - The extension uploads a fully encrypted vault; the server never sees plaintext.
 - The server never modifies vault contents — it only stores and returns the blob.
 - The server validates vault version numbers and rejects stale writes with `409 CONFLICT`.
-- **Local Sync Server and Dropbox**: a stale write is rejected atomically; the extension re-fetches and retries.
-- **Google Drive**: no server-side reject is possible (no compare-and-swap primitive), so a version mismatch on write is handled by the extension writing a conflict copy instead — see `docs/ARCHITECTURE.md`.
+- A rejected write is never surfaced to the user as a failure on the first attempt. The extension re-fetches the current vault, re-applies the change the user actually made to it, and writes again (up to three attempts). Because each attempt is applied to freshly fetched state, a concurrent write from another device is preserved rather than overwritten — the extension never re-sends an item list assembled from a stale read. See `docs/ARCHITECTURE.md` "Conflict Resolution".
+- **Local Sync Server and Dropbox**: a stale write is rejected atomically (SQLite transaction / Dropbox `rev`), so the retry is exact.
+- **Google Drive**: no server-side reject is possible (no compare-and-swap primitive), so the provider re-reads the stored version immediately before writing and reports a conflict itself. This leaves a small inherent race Drive cannot close — see `docs/ARCHITECTURE.md`.
 
 ---
 

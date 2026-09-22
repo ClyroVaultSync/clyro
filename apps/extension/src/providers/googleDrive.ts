@@ -113,9 +113,9 @@ async function downloadFile(fileId: string): Promise<VaultPayload | null> {
   return (await res.json()) as VaultPayload;
 }
 
-/** Returns the new file's Drive fileId. Callers cache it themselves — a conflict-copy file is never the cached vaultFileId. */
-async function createFile(payload: VaultPayload, fileName = VAULT_FILE_NAME): Promise<string> {
-  const metadata = { name: fileName, parents: ['appDataFolder'] };
+/** Returns the new file's Drive fileId, which the caller caches. */
+async function createFile(payload: VaultPayload): Promise<string> {
+  const metadata = { name: VAULT_FILE_NAME, parents: ['appDataFolder'] };
   const res = await authorizedFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, {
     method: 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${MULTIPART_BOUNDARY}` },
@@ -140,8 +140,9 @@ async function overwriteFile(fileId: string, payload: VaultPayload): Promise<voi
  * app-only `appDataFolder` (docs/ARCHITECTURE.md "Vault Synchronization"). Unlike
  * Dropbox, Drive has no compare-and-swap precondition, so a concurrent write can't
  * be rejected atomically — updateVault() re-reads the stored version immediately
- * before writing and, on a mismatch, saves the attempted write as a timestamped
- * conflict-copy file instead of silently overwriting or discarding it. See
+ * before writing and reports CONFLICT on a mismatch, leaving it to vaultManager's
+ * applyVaultChange() to re-apply the change to the newer vault and write again.
+ * That leaves a small inherent race Drive cannot close. See
  * knowledge/Features/Local-First Architecture.md.
  */
 export class GoogleDriveProvider implements SyncProvider {
@@ -190,10 +191,9 @@ export class GoogleDriveProvider implements SyncProvider {
       }
 
       if (current.vaultVersion >= payload.vaultVersion) {
-        await createFile({ ...payload, vaultSalt: current.vaultSalt }, `clyro-vault-conflict-${Date.now()}.json`);
         return {
           success: false,
-          error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; your changes were saved as a conflict copy.' },
+          error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; please refresh and try again.' },
         };
       }
 

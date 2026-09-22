@@ -2,13 +2,13 @@ import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
 import { getActiveProvider } from '../providers';
-import type { VaultItem, VaultData } from '@clyro/shared-types';
+import type { SyncProvider, VaultItem, VaultData } from '@clyro/shared-types';
 
 /**
  * Creates a brand-new, empty vault on the active Storage Provider: generates the
  * (non-secret) vaultSalt, derives the key from the chosen master password,
  * encrypts an empty item list, and hands it to the provider. Required once
- * before unlockVault()/getVaultItems()/saveVaultItems() have anything to work
+ * before unlockVault()/getVaultItems()/applyVaultChange() have anything to work
  * with. A CONFLICT means a vault already exists; the caller should route to
  * unlockVault() instead of retrying creation.
  */
@@ -154,49 +154,122 @@ export async function getVaultItems(): Promise<{ success: boolean; data?: VaultI
   }
 }
 
-export async function saveVaultItems(items: VaultItem[]): Promise<{ success: boolean; error?: string }> {
+/**
+ * A single edit to the vault, expressed as intent rather than as a replacement
+ * item list. This is what makes retrying a rejected write safe: re-sending a
+ * whole array computed from a now-stale read would silently erase whatever
+ * another device wrote in the meantime, whereas an intent can be re-applied to
+ * freshly fetched state as many times as needed. See docs/ARCHITECTURE.md
+ * "Conflict Resolution".
+ */
+export interface VaultChange {
+  upsert?: VaultItem[];
+  deleteIds?: string[];
+}
+
+/**
+ * How many times a write is re-attempted against freshly fetched state before
+ * giving up. Conflicts are expected to be rare in single-user, few-device use
+ * (docs/PRD.md), so a handful of attempts covers genuine races without letting
+ * a persistently contended vault spin.
+ */
+const MAX_SAVE_ATTEMPTS = 3;
+
+/**
+ * Applies a VaultChange to an item list. Pure — no I/O, no crypto — so the
+ * merge rules stay directly testable. Deletes run first so that deleting and
+ * re-adding the same id in one change ends with the item present.
+ */
+export function applyChange(items: VaultItem[], change: VaultChange): VaultItem[] {
+  let next = items;
+
+  if (change.deleteIds?.length) {
+    const doomed = new Set(change.deleteIds);
+    next = next.filter((item) => !doomed.has(item.id));
+  }
+
+  for (const incoming of change.upsert || []) {
+    const index = next.findIndex((item) => item.id === incoming.id);
+    next = index === -1 ? [...next, incoming] : next.map((item, i) => (i === index ? incoming : item));
+  }
+
+  return next;
+}
+
+/** The current vault blob and its version, from the provider or, if it's unreachable, the offline cache. */
+async function readCurrentVault(
+  provider: SyncProvider
+): Promise<{ encryptedVault: string | null; vaultVersion: number }> {
+  try {
+    const vault = await provider.getVault();
+    return { encryptedVault: vault?.encryptedVault ?? null, vaultVersion: vault?.vaultVersion ?? 0 };
+  } catch (error) {
+    console.warn('applyVaultChange(): provider unreachable when reading the current vault, falling back to cache.', error);
+    const cached = await getCachedVaultBlob();
+    return { encryptedVault: cached?.encryptedVault ?? null, vaultVersion: cached?.vaultVersion ?? 0 };
+  }
+}
+
+/**
+ * Applies a change to the vault and writes it back, re-fetching and re-applying
+ * on a version conflict rather than surfacing one to the user (docs/API.md
+ * "the extension re-fetches and retries").
+ *
+ * Every attempt applies the change to the vault as it exists *right now*, so
+ * another device's concurrent additions always survive — this never writes back
+ * an item list assembled from a stale read. It also decrypts the stored vault
+ * before replacing it, which means a vault encrypted under a different master
+ * password is refused instead of overwritten.
+ */
+export async function applyVaultChange(change: VaultChange): Promise<{ success: boolean; error?: string }> {
   const key = await getVaultKey();
   if (!key) return { success: false, error: 'Vault is locked.' };
 
   const provider = await getActiveProvider();
   if (!provider) return { success: false, error: 'No storage provider configured.' };
 
-  // Prefer the live version over the cache: if a previous cache refresh ever
-  // silently failed, trusting a stale cached version here would compute a
-  // vaultVersion the server already rejects, or worse, one it doesn't.
-  let vaultVersion = 0;
-  try {
-    const vault = await provider.getVault();
-    if (vault) vaultVersion = vault.vaultVersion;
-  } catch (error) {
-    console.warn('saveVaultItems(): provider unreachable when checking the current version, falling back to cache.', error);
-    const cached = await getCachedVaultBlob();
-    if (cached) vaultVersion = cached.vaultVersion;
-  }
+  for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt++) {
+    const current = await readCurrentVault(provider);
 
-  try {
-    const vaultData: VaultData = { items };
-    const serialized = JSON.stringify(vaultData);
-    const encryptedVault = await encryptVault(key, serialized);
-    const newVaultVersion = vaultVersion + 1;
-
-    const result = await provider.updateVault({ encryptedVault, vaultVersion: newVaultVersion });
-    if (!result.success) {
-      if (result.error.code === 'CONFLICT') {
-        return { success: false, error: 'Sync conflict: Vault was modified elsewhere. Please refresh.' };
+    let currentItems: VaultItem[] = [];
+    if (current.encryptedVault) {
+      try {
+        const vaultData = JSON.parse(await decryptVault(key, current.encryptedVault)) as VaultData;
+        currentItems = vaultData.items || [];
+      } catch {
+        return { success: false, error: 'Failed to decrypt vault contents.' };
       }
+    }
+
+    let encryptedVault: string;
+    try {
+      const vaultData: VaultData = { items: applyChange(currentItems, change) };
+      encryptedVault = await encryptVault(key, JSON.stringify(vaultData));
+    } catch {
+      return { success: false, error: 'Encryption failed.' };
+    }
+
+    const result = await provider.updateVault({ encryptedVault, vaultVersion: current.vaultVersion + 1 });
+
+    if (result.success) {
+      try {
+        const refreshed = await provider.getVault();
+        if (refreshed) await setCachedVaultBlob(refreshed.encryptedVault, refreshed.vaultVersion, refreshed.vaultSalt);
+      } catch {
+        // best-effort cache refresh; the write itself already succeeded
+      }
+      return { success: true };
+    }
+
+    if (result.error.code !== 'CONFLICT') {
       return { success: false, error: result.error.message || 'Failed to save vault.' };
     }
 
-    try {
-      const refreshed = await provider.getVault();
-      if (refreshed) await setCachedVaultBlob(refreshed.encryptedVault, refreshed.vaultVersion, refreshed.vaultSalt);
-    } catch {
-      // best-effort cache refresh; the write itself already succeeded
-    }
-
-    return { success: true };
-  } catch {
-    return { success: false, error: 'Encryption failed.' };
+    console.warn(`applyVaultChange(): version conflict on attempt ${attempt}, re-fetching and retrying.`);
   }
+
+  return {
+    success: false,
+    error: 'Sync conflict: the vault kept changing elsewhere while saving. Please refresh and try again.',
+  };
 }

@@ -150,22 +150,20 @@ describe('GoogleDriveProvider', () => {
     );
   });
 
-  it('updateVault() saves a conflict copy instead of overwriting on a version race', async () => {
+  it('updateVault() reports CONFLICT on a version race, writing nothing at all', async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ files: [{ id: 'file-1' }] })) // findVaultFileId
-      .mockResolvedValueOnce(jsonResponse({ encryptedVault: 'newer', vaultVersion: 3, vaultSalt: 's' })) // downloadFile
-      .mockResolvedValueOnce(jsonResponse({ id: 'conflict-file' })); // conflict-copy createFile
+      .mockResolvedValueOnce(jsonResponse({ encryptedVault: 'newer', vaultVersion: 3, vaultSalt: 's' })); // downloadFile
     const provider = new GoogleDriveProvider();
 
     const result = await provider.updateVault({ encryptedVault: 'stale-write', vaultVersion: 2 });
 
     expect(result.success).toBe(false);
     expect((result as { error: { code: string } }).error.code).toBe('CONFLICT');
-    expect(fetch).toHaveBeenLastCalledWith(
-      expect.stringContaining('uploadType=multipart'),
-      expect.objectContaining({ method: 'POST', body: expect.stringContaining('clyro-vault-conflict-') })
-    );
+    // No overwrite, and no conflict-copy file either — vaultManager re-applies the
+    // change to the newer vault and writes again instead.
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('deleteVault() is a no-op success when no file exists', async () => {

@@ -69,7 +69,7 @@ export const securityDocument: LegalDocument = {
         },
         {
           kind: 'p',
-          text: 'Concurrent edits are handled with a version number. Where the provider supports an atomic compare-and-swap, a stale write is rejected outright; where it does not, a stale write produces a conflict copy rather than silently overwriting the newer vault.'
+          text: 'Concurrent edits are handled with a version number. A stale write is rejected rather than allowed to overwrite the newer vault — atomically where the provider supports a compare-and-swap, and by the extension checking the stored version immediately before writing where it does not. The extension then re-applies your change to the newer vault and saves again, so an edit made on another device is preserved rather than overwritten.'
         }
       ]
     },

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
-import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, applyVaultChange } from './vaultManager';
 import {
   getActiveProviderId,
   initiatePairing,
@@ -23,7 +23,7 @@ vi.mock('./vaultManager', () => ({
   isVaultUnlocked: vi.fn(),
   vaultExists: vi.fn(),
   getVaultItems: vi.fn(),
-  saveVaultItems: vi.fn(),
+  applyVaultChange: vi.fn(),
 }));
 
 vi.mock('../providers', () => ({
@@ -129,12 +129,13 @@ describe('Background message routing', () => {
     expect(response).toEqual({ success: true, data: [] });
   });
 
-  it('SAVE_VAULT_ITEMS forwards the items array', async () => {
-    (saveVaultItems as Mock).mockResolvedValue({ success: true });
+  it('SAVE_VAULT_CHANGE forwards the change through unchanged', async () => {
+    (applyVaultChange as Mock).mockResolvedValue({ success: true });
+    const change = { upsert: [], deleteIds: ['gone'] };
 
-    const response = await handleMessage({ type: 'SAVE_VAULT_ITEMS', items: [] });
+    const response = await handleMessage({ type: 'SAVE_VAULT_CHANGE', change });
 
-    expect(saveVaultItems).toHaveBeenCalledWith([]);
+    expect(applyVaultChange).toHaveBeenCalledWith(change);
     expect(response).toEqual({ success: true });
   });
 
@@ -155,16 +156,16 @@ describe('Background message routing', () => {
 
   it('SAVE_NEW_CREDENTIAL adds a new item when no duplicate exists', async () => {
     (getVaultItems as Mock).mockResolvedValue({ success: true, data: [] });
-    (saveVaultItems as Mock).mockResolvedValue({ success: true });
+    (applyVaultChange as Mock).mockResolvedValue({ success: true });
 
     const response = await handleMessage({
       type: 'SAVE_NEW_CREDENTIAL',
       item: { name: 'Example', url: 'example.com', username: 'me', password: 'pw' },
     });
 
-    expect(saveVaultItems).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ username: 'me', url: 'example.com' })])
-    );
+    expect(applyVaultChange).toHaveBeenCalledWith({
+      upsert: [expect.objectContaining({ username: 'me', url: 'example.com' })],
+    });
     expect(response).toEqual({ success: true, data: { updated: false } });
   });
 
@@ -173,16 +174,18 @@ describe('Background message routing', () => {
       success: true,
       data: [{ id: 'existing-1', name: 'Old', url: 'example.com', username: 'me', password: 'old', createdAt: 't0', updatedAt: 't0' }],
     });
-    (saveVaultItems as Mock).mockResolvedValue({ success: true });
+    (applyVaultChange as Mock).mockResolvedValue({ success: true });
 
     const response = await handleMessage({
       type: 'SAVE_NEW_CREDENTIAL',
       item: { name: 'Example', url: 'example.com', username: 'me', password: 'newpw' },
     });
 
-    const savedItems = (saveVaultItems as Mock).mock.calls[0][0];
-    expect(savedItems).toHaveLength(1);
-    expect(savedItems[0]).toEqual(expect.objectContaining({ id: 'existing-1', password: 'newpw' }));
+    // An upsert carrying the existing id, so the retry can re-apply it to a newer
+    // vault without the surrounding items ever being re-sent.
+    const change = (applyVaultChange as Mock).mock.calls[0][0];
+    expect(change.upsert).toHaveLength(1);
+    expect(change.upsert[0]).toEqual(expect.objectContaining({ id: 'existing-1', password: 'newpw', createdAt: 't0' }));
     expect(response).toEqual({ success: true, data: { updated: true } });
   });
 

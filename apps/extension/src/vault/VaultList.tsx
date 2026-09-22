@@ -25,8 +25,11 @@ export default function VaultList({ onLock }: Props) {
   const [newNotes, setNewNotes] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  const fetchItems = async () => {
-    setLoading(true);
+  /** `showSpinner: false` is for refreshes that happen behind an action the user already
+   * sees feedback for (a save), where swapping the list for "Loading items..." would read
+   * as a glitch rather than as progress. */
+  const fetchItems = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const res = await chrome.runtime.sendMessage({ type: "GET_VAULT_ITEMS" });
       if (res.success) {
@@ -37,7 +40,7 @@ export default function VaultList({ onLock }: Props) {
     } catch {
       setError("Communication error.");
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
@@ -78,9 +81,8 @@ export default function VaultList({ onLock }: Props) {
       updatedAt: new Date().toISOString(),
     };
 
-    const newItems = [...items, newItem];
-    setItems(newItems);
-    await saveItems(newItems);
+    setItems([...items, newItem]);
+    await saveChange({ upsert: [newItem] });
 
     setShowAddForm(false);
     setNewName("");
@@ -91,18 +93,20 @@ export default function VaultList({ onLock }: Props) {
     setShowNewPassword(false);
   };
 
-  const saveItems = async (itemsToSave: VaultItem[]) => {
+  /**
+   * Sends the edit itself rather than the whole item list, so the background
+   * worker can re-apply it to the newest vault if another device wrote first —
+   * see applyVaultChange() in background/vaultManager.ts. Re-fetches either way:
+   * on failure to drop the optimistic update, on success to pick up anything
+   * another device added while this save was in flight.
+   */
+  const saveChange = async (change: { upsert?: VaultItem[]; deleteIds?: string[] }) => {
     setSaving(true);
     setError("");
     try {
-      const res = await chrome.runtime.sendMessage({
-        type: "SAVE_VAULT_ITEMS",
-        items: itemsToSave,
-      });
-      if (!res.success) {
-        setError(res.error?.message || "Failed to save.");
-        fetchItems(); // revert to server state
-      }
+      const res = await chrome.runtime.sendMessage({ type: "SAVE_VAULT_CHANGE", change });
+      if (!res.success) setError(res.error?.message || "Failed to save.");
+      await fetchItems(false);
     } catch {
       setError("Communication error while saving.");
     } finally {

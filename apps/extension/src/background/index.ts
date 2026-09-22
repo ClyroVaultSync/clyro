@@ -1,5 +1,5 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, saveVaultItems } from './vaultManager';
+import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, applyVaultChange } from './vaultManager';
 import {
   getActiveProviderId,
   initiatePairing,
@@ -84,8 +84,8 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         if (result.success) return { success: true, data: result.data };
         return { success: false, error: { code: 'GET_ITEMS_FAILED', message: result.error || 'Failed to get vault items.' } };
       }
-      case 'SAVE_VAULT_ITEMS': {
-        const result = await saveVaultItems(message.items);
+      case 'SAVE_VAULT_CHANGE': {
+        const result = await applyVaultChange(message.change);
         if (result.success) return { success: true };
         return { success: false, error: { code: 'SAVE_ITEMS_FAILED', message: result.error || 'Failed to save vault items.' } };
       }
@@ -103,20 +103,17 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
           return { success: false, error: { code: 'SAVE_NEW_CREDENTIAL_FAILED', message: existing.error || 'Failed to read vault items.' } };
         }
         // Duplicate detection per docs/PRD.md: same site + same username is an update, not a new entry.
+        // This stays a read-then-decide, so two devices saving the same site+username at the same
+        // moment can still produce a duplicate entry — never a lost one, since the upsert below is
+        // applied to whatever the vault holds at write time.
         const duplicate = existing.data.find(
           (item) => domainMatches(item.url, extractDomain(message.item.url)) && item.username === message.item.username
         );
         const now = new Date().toISOString();
-        let nextItems: VaultItem[];
-        if (duplicate) {
-          nextItems = existing.data.map((item) =>
-            item.id === duplicate.id ? { ...item, ...message.item, updatedAt: now } : item
-          );
-        } else {
-          const newItem: VaultItem = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...message.item };
-          nextItems = [...existing.data, newItem];
-        }
-        const saveResult = await saveVaultItems(nextItems);
+        const item: VaultItem = duplicate
+          ? { ...duplicate, ...message.item, updatedAt: now }
+          : { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...message.item };
+        const saveResult = await applyVaultChange({ upsert: [item] });
         if (saveResult.success) return { success: true, data: { updated: Boolean(duplicate) } };
         return { success: false, error: { code: 'SAVE_NEW_CREDENTIAL_FAILED', message: saveResult.error || 'Failed to save credential.' } };
       }

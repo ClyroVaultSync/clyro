@@ -417,8 +417,12 @@ Users should not be required to manually synchronize their vault.
 
 Synchronization uses optimistic concurrency based on `vaultVersion`:
 
-- **Local Sync Server and Dropbox**: a stale-version write is atomically rejected and retried after re-fetching.
-- **Google Drive**: lacking a native compare-and-swap primitive, a stale-version write produces a **conflict copy** instead of overwriting, so no data is silently lost. The user resolves the conflict manually.
+A stale-version write is rejected rather than allowed to overwrite. The extension then resolves it without involving the user: it re-fetches the current vault, re-applies the change the user made, and writes again.
+
+This is safe because a save carries the specific change (add or update this credential, delete this one) rather than a whole replacement list, so a credential another device saved a moment earlier is still there when the retry re-fetches. Two devices editing *the same* credential at the same time still resolve last-write-wins.
+
+- **Local Sync Server and Dropbox**: the stale write is rejected atomically, so the retry is exact.
+- **Google Drive**: lacking a native compare-and-swap primitive, the extension re-reads the stored version immediately before writing and detects the conflict itself, leaving a small race Drive cannot close.
 
 Conflicts are expected to be rare in normal single-user, few-device use.
 
@@ -800,8 +804,9 @@ Low to Medium (higher on Google Drive specifically)
 
 ### Mitigation
 
-- Use optimistic concurrency (`vaultVersion`) on every provider.
-- Write a conflict copy on Google Drive version mismatch rather than overwriting.
+- Use optimistic concurrency (`vaultVersion`) on every provider, including Google Drive, where the extension performs the version check itself.
+- Express a save as the change made, not as a replacement item list, so a rejected write can be re-applied to the newer vault without discarding another device's work.
+- Retry a rejected write automatically against freshly fetched state, surfacing an error only if it keeps failing.
 - Allow users to manually resolve conflicts and edit credentials if necessary.
 
 ---
@@ -891,7 +896,7 @@ The Clyro Version 1.0 release shall be considered complete when all of the follo
 
 - Vault changes synchronize automatically with the active Storage Provider.
 - Offline changes synchronize after connectivity is restored.
-- A Google Drive version conflict produces a conflict copy, never a lost write.
+- A version conflict on any provider is re-applied to the newer vault and retried, never a lost write.
 - The Local Sync Server rejects unpaired callers.
 
 ## Export / Import

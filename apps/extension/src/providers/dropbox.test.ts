@@ -151,12 +151,11 @@ describe('DropboxProvider', () => {
     expect(uploadInit.body).toBe(JSON.stringify({ encryptedVault: 'new', vaultVersion: 2, vaultSalt: 's' }));
   });
 
-  it('updateVault() returns CONFLICT on a write race without attempting a conflict-copy upload', async () => {
+  it('updateVault() returns CONFLICT without uploading when the stored version has already moved', async () => {
+    // The `rev` compare-and-swap would happily accept this write — the rev is current.
+    // Only the version check catches that it was computed against an older vault.
     await setDropboxConfig(validConfig);
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(downloadResponse({ encryptedVault: 'newer', vaultVersion: 3, vaultSalt: 's' }, 'rev-3'))
-      .mockResolvedValueOnce(conflictResponse());
+    global.fetch = vi.fn().mockResolvedValueOnce(downloadResponse({ encryptedVault: 'newer', vaultVersion: 3, vaultSalt: 's' }, 'rev-3'));
     const provider = new DropboxProvider();
 
     const result = await provider.updateVault({ encryptedVault: 'stale-write', vaultVersion: 2 });
@@ -165,7 +164,24 @@ describe('DropboxProvider', () => {
       success: false,
       error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; please refresh and try again.' },
     });
-    expect(fetch).toHaveBeenCalledTimes(2); // download + one rejected upload — no conflict-copy retry
+    expect(fetch).toHaveBeenCalledTimes(1); // download only — nothing was written
+  });
+
+  it('updateVault() returns CONFLICT when Dropbox itself rejects the rev', async () => {
+    await setDropboxConfig(validConfig);
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(downloadResponse({ encryptedVault: 'old', vaultVersion: 1, vaultSalt: 's' }, 'rev-1'))
+      .mockResolvedValueOnce(conflictResponse());
+    const provider = new DropboxProvider();
+
+    const result = await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 });
+
+    expect(result).toEqual({
+      success: false,
+      error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; please refresh and try again.' },
+    });
+    expect(fetch).toHaveBeenCalledTimes(2); // download + one rejected upload, not retried here
   });
 
   it('deleteVault() is a no-op success when no file exists', async () => {

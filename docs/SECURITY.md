@@ -238,7 +238,7 @@ Version 1.0 is designed to mitigate:
 - Network interception between the extension and a Storage Provider
 - Unauthenticated or unauthorized callers reaching the Local Sync Server (mitigated by the pairing token + Origin allowlist)
 - Replay or tampering of encrypted vault data (mitigated by authenticated encryption)
-- Lost writes from concurrent updates (mitigated by `vaultVersion` optimistic concurrency, with conflict-copy handling for Google Drive)
+- Lost writes from concurrent updates (mitigated by `vaultVersion` optimistic concurrency, plus automatic re-apply-and-retry on a rejected write — saves carry the change made, never a replacement item list)
 - Credential exposure via a compromised or malicious web page — mitigated structurally by never putting plaintext vault data in a web page's JS context
 
 ## Threats Outside the Scope of Version 1.0
@@ -474,7 +474,7 @@ Synchronization transfers only encrypted vault data to and from a single active 
 - Compares `vaultVersion` to detect conflicting writes.
 - Never inspects vault contents.
 
-Google Drive, lacking a native compare-and-swap primitive, writes a conflict copy on a version mismatch rather than silently overwriting a concurrent write — see `docs/ARCHITECTURE.md`.
+Google Drive, lacking a native compare-and-swap primitive, re-reads the stored version immediately before writing and reports a conflict itself rather than silently overwriting a concurrent write. On any provider, a rejected write is re-applied to the newer vault and retried rather than discarded — see `docs/ARCHITECTURE.md`.
 
 ## Offline Access
 
@@ -654,7 +654,7 @@ Recommended testing includes:
 - Encryption / decryption validation
 - Local Sync Server pairing-token and Origin-allowlist enforcement
 - Bridge message-boundary testing (confirming no message type can carry secrets)
-- Storage Provider conflict-handling behavior (especially the Google Drive conflict-copy path)
+- Storage Provider conflict-handling behavior, including that a retried write preserves a concurrent write from another device
 - Export / import round-trip testing, including across Storage Providers
 - Input validation
 
@@ -731,7 +731,7 @@ Before any production release, verify that:
 - Vault contents remain encrypted at rest, everywhere.
 - The bridge cannot carry credentials, master passwords, vault keys, or decrypted blobs, under any message type.
 - The Local Sync Server rejects unpaired or disallowed-Origin callers.
-- Google Drive conflict handling produces a conflict copy, never a silent overwrite.
+- A version conflict is re-applied to the newer vault and retried, never a silent overwrite and never a lost write.
 - Export / import round-trips a vault correctly, including across Storage Providers.
 - Sensitive data is never logged.
 - Documentation accurately reflects implementation.
