@@ -1,15 +1,19 @@
 import React, { useState } from "react";
 import type { VaultItem } from "@clyro/shared-types";
+import InteractiveHoverButton from "../popup/InteractiveHoverButton";
 import { EyeIcon, EyeOffIcon } from "./VaultIcons";
 import CopyIconButton from "./CopyIconButton";
 
 interface Props {
   item: VaultItem;
   onCopy: (text: string) => void;
+  onEdit: () => void;
 }
 
-// Shared with VaultList's column-header row so the two stay aligned.
-export const ROW_GRID_COLUMNS = "1fr 140px 120px 32px";
+// Shared with VaultList's column-header row so the two stay aligned. The last
+// column fits the compact Edit button (same 100px as the page's other compact
+// buttons).
+export const ROW_GRID_COLUMNS = "1fr 140px 120px 32px 100px";
 
 // Flat, desaturated palette for the letter-avatar fallback (no real favicon
 // fetching — see the plan's note on why: it would leak every saved site's
@@ -38,7 +42,7 @@ function formatRelativeTime(iso: string): string {
   return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
-export default function VaultItemRow({ item, onCopy }: Props) {
+export default function VaultItemRow({ item, onCopy, onEdit }: Props) {
   const [revealed, setRevealed] = useState(false);
 
   return (
@@ -138,6 +142,10 @@ export default function VaultItemRow({ item, onCopy }: Props) {
       <div style={{ fontSize: "12px", color: "#a39c97" }}>{formatRelativeTime(item.updatedAt)}</div>
 
       <CopyIconButton onCopy={() => onCopy(item.password)} title="Copy password" />
+
+      <InteractiveHoverButton onClick={onEdit} compact>
+        Edit
+      </InteractiveHoverButton>
     </div>
   );
 }

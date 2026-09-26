@@ -2,12 +2,16 @@ import React, { useEffect, useState, useMemo } from "react";
 import type { VaultItem } from "@clyro/shared-types";
 import InteractiveHoverButton from "../popup/InteractiveHoverButton";
 import VaultItemRow, { ROW_GRID_COLUMNS } from "./VaultItemRow";
-import { SearchIcon, ChevronDownIcon, ArrowLeftIcon } from "./VaultIcons";
+import CredentialForm, { inputStyle, compactButtonWidth } from "./CredentialForm";
+import { SearchIcon, ChevronDownIcon } from "./VaultIcons";
 import "./VaultList.css";
 
 interface Props {
   onLock: () => void;
 }
+
+/** Which screen the vault shows: the item list (null), or the credential form. */
+type FormState = null | { mode: "add" } | { mode: "edit"; item: VaultItem };
 
 export default function VaultList({ onLock }: Props) {
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -15,15 +19,7 @@ export default function VaultList({ onLock }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Add Credential Form State
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newNotes, setNewNotes] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [form, setForm] = useState<FormState>(null);
 
   /** `showSpinner: false` is for refreshes that happen behind an action the user already
    * sees feedback for (a save), where swapping the list for "Loading items..." would read
@@ -63,52 +59,38 @@ export default function VaultList({ onLock }: Props) {
     if (!res.success) setError(res.error?.message || "Failed to copy to clipboard.");
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName || !newUrl || !newPassword) {
+  /** Handles both Add (new id) and Edit (existing id) — applyChange() replaces by id. */
+  const handleSave = async (item: VaultItem) => {
+    if (!item.name || !item.url || !item.password) {
       setError("Name, URL, and Password are required.");
       return;
     }
+    if (await saveChange({ upsert: [item] })) setForm(null);
+  };
 
-    const newItem: VaultItem = {
-      id: crypto.randomUUID(),
-      name: newName,
-      url: newUrl,
-      username: newUsername,
-      password: newPassword,
-      notes: newNotes || undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setItems([...items, newItem]);
-    await saveChange({ upsert: [newItem] });
-
-    setShowAddForm(false);
-    setNewName("");
-    setNewUrl("");
-    setNewUsername("");
-    setNewPassword("");
-    setNewNotes("");
-    setShowNewPassword(false);
+  const handleDelete = async (id: string) => {
+    if (await saveChange({ deleteIds: [id] })) setForm(null);
   };
 
   /**
    * Sends the edit itself rather than the whole item list, so the background
    * worker can re-apply it to the newest vault if another device wrote first —
-   * see applyVaultChange() in background/vaultManager.ts. Re-fetches either way:
-   * on failure to drop the optimistic update, on success to pick up anything
-   * another device added while this save was in flight.
+   * see applyVaultChange() in background/vaultManager.ts. Re-fetches either way,
+   * so the list shows what is actually stored, including anything another device
+   * added while this save was in flight. Resolves to whether the save succeeded,
+   * so the form can stay open — keeping what the user typed — when it didn't.
    */
-  const saveChange = async (change: { upsert?: VaultItem[]; deleteIds?: string[] }) => {
+  const saveChange = async (change: { upsert?: VaultItem[]; deleteIds?: string[] }): Promise<boolean> => {
     setSaving(true);
     setError("");
     try {
       const res = await chrome.runtime.sendMessage({ type: "SAVE_VAULT_CHANGE", change });
       if (!res.success) setError(res.error?.message || "Failed to save.");
       await fetchItems(false);
+      return Boolean(res.success);
     } catch {
       setError("Communication error while saving.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -174,92 +156,15 @@ export default function VaultList({ onLock }: Props) {
         </div>
       )}
 
-      {showAddForm ? (
-        <form
-          onSubmit={handleAddSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            background: "#1a1210",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            borderRadius: "12px",
-            padding: "20px",
-            boxSizing: "border-box",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <button
-              type="button"
-              className="vault-icon-btn"
-              onClick={() => setShowAddForm(false)}
-              title="Back to vault"
-              style={{ flexShrink: 0 }}
-            >
-              <ArrowLeftIcon size={18} />
-            </button>
-            <h2 style={{ margin: 0, fontSize: "16px", color: "#f5f3f1" }}>Add Credential</h2>
-          </div>
-          <input
-            type="text"
-            placeholder="Name (e.g. GitHub)"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            required
-            style={inputStyle}
-          />
-          <input
-            type="text"
-            placeholder="URL (e.g. github.com)"
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            required
-            style={inputStyle}
-          />
-          <input
-            type="text"
-            placeholder="Username / Email (optional)"
-            value={newUsername}
-            onChange={(e) => setNewUsername(e.target.value)}
-            style={inputStyle}
-          />
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              type={showNewPassword ? "text" : "password"}
-              placeholder="Password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              style={{ ...inputStyle, flex: 1 }}
-            />
-            <div style={{ width: compactButtonWidth }}>
-              <InteractiveHoverButton onClick={() => setShowNewPassword(!showNewPassword)} compact>
-                {showNewPassword ? "Hide" : "Show"}
-              </InteractiveHoverButton>
-            </div>
-          </div>
-          <textarea
-            placeholder="Notes (optional)"
-            value={newNotes}
-            onChange={(e) => setNewNotes(e.target.value)}
-            rows={3}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-
-          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-            <div style={{ flex: 1 }}>
-              <InteractiveHoverButton onClick={() => setShowAddForm(false)}>Cancel</InteractiveHoverButton>
-            </div>
-            <div style={{ flex: 1 }}>
-              <InteractiveHoverButton type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save"}
-              </InteractiveHoverButton>
-            </div>
-          </div>
-        </form>
+      {form ? (
+        <CredentialForm
+          key={form.mode === "edit" ? form.item.id : "new"}
+          item={form.mode === "edit" ? form.item : undefined}
+          saving={saving}
+          onSave={handleSave}
+          onCancel={() => setForm(null)}
+          onDelete={form.mode === "edit" ? () => handleDelete(form.item.id) : undefined}
+        />
       ) : (
         <>
           <div
@@ -334,6 +239,7 @@ export default function VaultList({ onLock }: Props) {
                 Last Modified <ChevronDownIcon size={11} />
               </div>
               <div />
+              <div />
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px" }}>
@@ -344,12 +250,19 @@ export default function VaultList({ onLock }: Props) {
                   {items.length === 0 ? "Vault is empty." : "No results found."}
                 </div>
               ) : (
-                filteredItems.map((item) => <VaultItemRow key={item.id} item={item} onCopy={handleCopy} />)
+                filteredItems.map((item) => (
+                  <VaultItemRow
+                    key={item.id}
+                    item={item}
+                    onCopy={handleCopy}
+                    onEdit={() => setForm({ mode: "edit", item })}
+                  />
+                ))
               )}
             </div>
           </div>
 
-          <InteractiveHoverButton onClick={() => setShowAddForm(true)} disabled={loading}>
+          <InteractiveHoverButton onClick={() => setForm({ mode: "add" })} disabled={loading}>
             Add Credential
           </InteractiveHoverButton>
         </>
@@ -357,16 +270,6 @@ export default function VaultList({ onLock }: Props) {
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  boxSizing: "border-box" as const,
-  borderRadius: "8px",
-  border: "1px solid rgba(255, 255, 255, 0.1)",
-  background: "#120d0c",
-  color: "#f5f3f1",
-};
 
 const searchInputStyle = {
   ...inputStyle,
@@ -381,5 +284,3 @@ const columnHeaderStyle = {
   color: "#a39c97",
   textTransform: "uppercase" as const,
 };
-
-const compactButtonWidth = "100px";

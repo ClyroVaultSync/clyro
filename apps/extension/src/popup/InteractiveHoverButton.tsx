@@ -15,6 +15,8 @@ interface Props {
    * leaves a real gap at that width.
    */
   compact?: boolean;
+  /** 'danger' floods red instead of purple — for destructive actions like Delete. */
+  variant?: 'default' | 'danger';
 }
 
 // Plain-CSS port of the website's InteractiveHoverButton
@@ -30,8 +32,12 @@ export default function InteractiveHoverButton({
   type = 'button',
   disabled = false,
   compact = false,
+  variant = 'default',
 }: Props) {
-  const className = `interactive-hover-button${compact ? ' interactive-hover-button--compact' : ''}`;
+  const className =
+    'interactive-hover-button' +
+    (compact ? ' interactive-hover-button--compact' : '') +
+    (variant === 'danger' ? ' interactive-hover-button--danger' : '');
   return (
     <button type={type} className={className} onClick={onClick} disabled={disabled}>
       <span className="ihb-dot" />

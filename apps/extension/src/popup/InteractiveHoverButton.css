@@ -39,6 +39,13 @@
   clip-path: circle(75% at 50% 50%);
 }
 
+/* Destructive actions (Delete) flood red instead of purple — same red as the
+   vault page's error banner. Only the flood color changes; at rest the button
+   is identical to its neighbours. */
+.interactive-hover-button--danger .ihb-dot {
+  background: #ef4444;
+}
+
 .interactive-hover-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
