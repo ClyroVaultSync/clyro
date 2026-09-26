@@ -158,6 +158,13 @@ The companion website provides marketing and a launcher for the extension. Examp
 
 The website is **not** a vault interface. It never renders credentials, never receives a decryption key, and structurally cannot reach a user's local server or cloud storage — see [Extension ↔ Website Bridge](#extension--website-bridge).
 
+### Hosting
+
+The website is a **static export** (`output: 'export'` in `apps/website/next.config.js`), served from Cloudflare Pages at `https://clyrovault.pages.dev` on the free plan. Every push to `main` rebuilds and redeploys it.
+
+- **It must stay server-free.** Static export cannot serve API routes, middleware, `next/image` optimisation, edge/on-demand routes, or dynamic routes without `generateStaticParams`. A feature that needs one of these means changing the hosting model, not just the code. This is also why the link-preview image is a committed `app/opengraph-image.png` rather than a generated route.
+- **The live origin is duplicated on purpose.** It is set in `NEXT_PUBLIC_SITE_URL` / `src/lib/site-config.ts` (canonical URLs, sitemap, robots) and in the extension's `externally_connectable`. A domain change has to update both, or the bridge silently stops working.
+
 ---
 
 # System Boundaries
