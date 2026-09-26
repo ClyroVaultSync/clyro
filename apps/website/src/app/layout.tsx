@@ -16,7 +16,7 @@ const TITLE = 'Clyro — Local-First Zero-Knowledge Password Vault';
 
 export const metadata: Metadata = {
   // Required for the relative OG/Twitter image paths below to resolve to
-  // absolute URLs. Points at the placeholder domain until a real one exists.
+  // absolute URLs.
   metadataBase: new URL(siteConfig.siteUrl),
   title: {
     default: TITLE,

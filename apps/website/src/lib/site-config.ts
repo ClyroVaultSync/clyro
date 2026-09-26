@@ -19,7 +19,7 @@ const EXTENSION_ID = process.env.NEXT_PUBLIC_CLYRO_EXTENSION_ID || 'cdaicnajdmjj
 
 const GITHUB_REPO = process.env.NEXT_PUBLIC_CLYRO_GITHUB_URL || 'https://github.com/ClyroVaultSync/clyro';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://clyro.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://clyrovault.pages.dev';
 
 /**
  * PLACEHOLDERS — not real destinations yet:
@@ -28,9 +28,10 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://clyro.app';
  *   - `localServerDownloadUrl`: the Local Sync Server (Phase 5) doesn't exist.
  *     Empty string means "no download yet" and callers render a disabled control
  *     rather than a link to nowhere.
- *   - `siteUrl`: clyro.app is not a registered domain. It matches the
- *     `externally_connectable` placeholder in apps/extension/manifest.json; both
- *     must be swapped together at deploy time.
+ *
+ * `siteUrl` is real: the site is deployed on Cloudflare Pages at
+ * clyrovault.pages.dev. It must stay listed in `externally_connectable` in
+ * apps/extension/manifest.json — change or add a domain in both places together.
  */
 export const siteConfig = {
   name: 'Clyro',

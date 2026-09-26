@@ -24,7 +24,7 @@
   },
   "externally_connectable": {
     "matches": [
-      "https://clyro.app/*",
+      "https://clyrovault.pages.dev/*",
       "http://localhost:3000/*"
     ]
   },
