@@ -480,6 +480,8 @@ Google Drive, lacking a native compare-and-swap primitive, re-reads the stored v
 
 Version 1.0 supports full offline vault access via the extension's local encrypted cache. Users may unlock a previously synchronized encrypted vault without connectivity to their Storage Provider. Offline access never requires any Storage Provider to decrypt anything, because none of them can.
 
+Changes saved while the Storage Provider is unreachable wait in an offline write queue, encrypted with the vault key (XChaCha20-Poly1305, as the vault itself) before they are written to `chrome.storage.local`. Only the number of waiting changes and the last sync error message are stored unencrypted; neither contains credential data. Until they sync, those changes exist only on this device, so removing the extension or clearing its data first loses them. See `docs/ARCHITECTURE.md` "Offline Synchronization".
+
 ## Vault Export and Import
 
 The encrypted `.clyro` export file:

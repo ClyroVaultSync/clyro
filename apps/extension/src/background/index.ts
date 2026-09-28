@@ -1,5 +1,15 @@
 import type { BackgroundMessage, BackgroundResponse } from './messages';
-import { createVault, unlockVault, lockVault, isVaultUnlocked, vaultExists, getVaultItems, applyVaultChange } from './vaultManager';
+import {
+  createVault,
+  unlockVault,
+  lockVault,
+  isVaultUnlocked,
+  vaultExists,
+  getVaultItems,
+  applyVaultChange,
+  syncPendingChanges,
+} from './vaultManager';
+import { getSyncStatus, clearPendingChanges, SYNC_RETRY_ALARM } from './syncQueue';
 import {
   getActiveProviderId,
   initiatePairing,
@@ -53,6 +63,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
   });
 }
 
+// Registered at the top level so the alarm can wake a stopped service worker.
+if (typeof chrome !== 'undefined' && chrome.alarms?.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== SYNC_RETRY_ALARM) return;
+    syncPendingChanges().catch((error) => console.warn('Retry alarm: sync failed.', error));
+  });
+}
+
 export async function handleMessage(message: BackgroundMessage): Promise<BackgroundResponse> {
   try {
     switch (message.type) {
@@ -86,8 +104,16 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
       }
       case 'SAVE_VAULT_CHANGE': {
         const result = await applyVaultChange(message.change);
-        if (result.success) return { success: true };
+        if (result.success) return { success: true, data: { synced: Boolean(result.synced) } };
         return { success: false, error: { code: 'SAVE_ITEMS_FAILED', message: result.error || 'Failed to save vault items.' } };
+      }
+      case 'GET_SYNC_STATUS': {
+        const status = await getSyncStatus();
+        return { success: true, data: { ...status, providerId: await getActiveProviderId() } };
+      }
+      case 'SYNC_NOW': {
+        const status = await syncPendingChanges();
+        return { success: true, data: { ...status, providerId: await getActiveProviderId() } };
       }
       case 'FIND_MATCHING_CREDENTIALS': {
         const result = await getVaultItems();
@@ -114,7 +140,7 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
           ? { ...duplicate, ...message.item, updatedAt: now }
           : { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...message.item };
         const saveResult = await applyVaultChange({ upsert: [item] });
-        if (saveResult.success) return { success: true, data: { updated: Boolean(duplicate) } };
+        if (saveResult.success) return { success: true, data: { updated: Boolean(duplicate), synced: Boolean(saveResult.synced) } };
         return { success: false, error: { code: 'SAVE_NEW_CREDENTIAL_FAILED', message: saveResult.error || 'Failed to save credential.' } };
       }
       case 'STASH_PENDING_CREDENTIAL': {
@@ -162,6 +188,9 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         await clearDropboxConfig();
         await clearVaultKey();
         await clearCachedVaultBlob();
+        // Changes still waiting belong to the vault being disconnected from; the
+        // confirm dialog before this warned how many would be lost.
+        await clearPendingChanges();
         await closeOpenVaultTabs();
         return { success: true };
       }

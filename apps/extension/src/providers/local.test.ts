@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LocalProvider, setLocalConfig, getLocalConfig, clearLocalConfig } from './local';
+import { ProviderUnreachableError } from './errors';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockStorage = new Map<string, any>();
@@ -57,6 +58,28 @@ describe('LocalProvider', () => {
     const provider = new LocalProvider(config);
 
     await expect(provider.getVault()).rejects.toThrow('Bad token.');
+    await expect(provider.getVault()).rejects.not.toBeInstanceOf(ProviderUnreachableError);
+  });
+
+  it('getVault() throws ProviderUnreachableError when the server is off', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch')) as unknown as typeof fetch;
+    const provider = new LocalProvider(config);
+
+    await expect(provider.getVault()).rejects.toBeInstanceOf(ProviderUnreachableError);
+  });
+
+  it('updateVault() reports NETWORK_ERROR when the server is off or erroring', async () => {
+    const provider = new LocalProvider(config);
+
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch')) as unknown as typeof fetch;
+    expect(await provider.updateVault({ encryptedVault: 'e', vaultVersion: 2 })).toEqual({
+      success: false,
+      error: { code: 'NETWORK_ERROR', message: 'Could not reach the Local Sync Server.' },
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({ status: 503, json: async () => ({}) }) as unknown as typeof fetch;
+    const result = await provider.updateVault({ encryptedVault: 'e', vaultVersion: 2 });
+    expect((result as { error: { code: string } }).error.code).toBe('NETWORK_ERROR');
   });
 
   it('createVault() posts the payload', async () => {

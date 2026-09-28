@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import WheelPicker from './WheelPicker';
 import VaultUnlockView from './VaultUnlockView';
 import Shuffle from './Shuffle';
+import { getDisconnectWarning } from './disconnectWarning';
 
 interface Props {
   isUnlocked: boolean;
@@ -39,11 +40,6 @@ const LOCKED_ITEMS: MenuItem[] = [
   { label: 'Remove from Chrome', action: 'remove-extension' },
 ];
 
-// Same wording as OptionsApp's Disconnect confirm — this is a shortcut to
-// that same action, not a separate, weaker path.
-const DISCONNECT_WARNING =
-  "Disconnect this storage provider? Your vault stays where it is — export it first if you don't have a backup, since reconnecting will need either the same provider again or an import.";
-
 export default function MainMenuView({ isUnlocked, onStatusChange }: Props) {
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState('');
@@ -79,7 +75,7 @@ export default function MainMenuView({ isUnlocked, onStatusChange }: Props) {
           chrome.runtime.openOptionsPage();
           break;
         case 'change-storage':
-          if (window.confirm(DISCONNECT_WARNING)) {
+          if (window.confirm(await getDisconnectWarning())) {
             await chrome.runtime.sendMessage({ type: 'CLEAR_PROVIDER' });
             onStatusChange();
           }

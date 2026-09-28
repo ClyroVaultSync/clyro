@@ -13,6 +13,19 @@ interface Props {
 /** Which screen the vault shows: the item list (null), or the credential form. */
 type FormState = null | { mode: "add" } | { mode: "edit"; item: VaultItem };
 
+/** Changes saved on this device that haven't reached the storage provider yet (background/syncQueue.ts). */
+interface SyncStatus {
+  pendingCount: number;
+  lastError: string | null;
+  providerId: "local" | "google-drive" | "dropbox" | null;
+}
+
+const PROVIDER_NAMES: Record<NonNullable<SyncStatus["providerId"]>, string> = {
+  local: "the Local Sync Server",
+  "google-drive": "Google Drive",
+  dropbox: "Dropbox",
+};
+
 export default function VaultList({ onLock }: Props) {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +33,8 @@ export default function VaultList({ onLock }: Props) {
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [form, setForm] = useState<FormState>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   /** `showSpinner: false` is for refreshes that happen behind an action the user already
    * sees feedback for (a save), where swapping the list for "Loading items..." would read
@@ -40,9 +55,41 @@ export default function VaultList({ onLock }: Props) {
     }
   };
 
+  const fetchSyncStatus = async () => {
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "GET_SYNC_STATUS" });
+      if (res.success) setSyncStatus(res.data);
+    } catch {
+      // Leave the last known status showing; a failed status check isn't worth an error banner.
+    }
+  };
+
   useEffect(() => {
     fetchItems();
+    fetchSyncStatus();
   }, []);
+
+  // The background worker announces every change to the queue, including syncs
+  // this page didn't start (the retry alarm, a sync after a read elsewhere).
+  useEffect(() => {
+    const listener = (message: { type?: string }) => {
+      if (message?.type === "SYNC_STATUS_CHANGED") fetchSyncStatus();
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "SYNC_NOW" });
+      if (res.success) setSyncStatus(res.data);
+    } catch {
+      setError("Communication error while syncing.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleLock = async () => {
     await chrome.runtime.sendMessage({ type: "LOCK_VAULT" });
@@ -75,10 +122,12 @@ export default function VaultList({ onLock }: Props) {
   /**
    * Sends the edit itself rather than the whole item list, so the background
    * worker can re-apply it to the newest vault if another device wrote first —
-   * see applyVaultChange() in background/vaultManager.ts. Re-fetches either way,
-   * so the list shows what is actually stored, including anything another device
-   * added while this save was in flight. Resolves to whether the save succeeded,
-   * so the form can stay open — keeping what the user typed — when it didn't.
+   * see applyVaultChange() in background/vaultManager.ts. A save the storage
+   * provider couldn't receive still succeeds: it's kept on this device and the
+   * sync notice above the list says so. Re-fetches either way, so the list shows
+   * what is actually stored, including anything another device added while this
+   * save was in flight. Resolves to whether the save succeeded, so the form can
+   * stay open — keeping what the user typed — when it didn't.
    */
   const saveChange = async (change: { upsert?: VaultItem[]; deleteIds?: string[] }): Promise<boolean> => {
     setSaving(true);
@@ -86,7 +135,7 @@ export default function VaultList({ onLock }: Props) {
     try {
       const res = await chrome.runtime.sendMessage({ type: "SAVE_VAULT_CHANGE", change });
       if (!res.success) setError(res.error?.message || "Failed to save.");
-      await fetchItems(false);
+      await Promise.all([fetchItems(false), fetchSyncStatus()]);
       return Boolean(res.success);
     } catch {
       setError("Communication error while saving.");
@@ -140,6 +189,10 @@ export default function VaultList({ onLock }: Props) {
           </InteractiveHoverButton>
         </div>
       </div>
+
+      {syncStatus && syncStatus.pendingCount > 0 && (
+        <SyncNotice status={syncStatus} syncing={syncing} onSyncNow={handleSyncNow} />
+      )}
 
       {error && (
         <div
@@ -267,6 +320,45 @@ export default function VaultList({ onLock }: Props) {
           </InteractiveHoverButton>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Shown while changes are waiting to sync. Deliberately not the red error style:
+ * the changes are safe on this device, and they sync by themselves once the
+ * provider answers. `lastError` is why the latest attempt didn't go through.
+ */
+function SyncNotice({ status, syncing, onSyncNow }: { status: SyncStatus; syncing: boolean; onSyncNow: () => void }) {
+  const changes = status.pendingCount === 1 ? "1 change" : `${status.pendingCount} changes`;
+  const provider = status.providerId ? PROVIDER_NAMES[status.providerId] : "your storage provider";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        background: "#1a1210",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        padding: "10px 12px",
+        borderRadius: "8px",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "12px", color: "#f5f3f1" }}>
+          {`${changes} saved on this device only, waiting for ${provider}.`}
+        </div>
+        {status.lastError && (
+          <div style={{ fontSize: "11px", color: "#a39c97", marginTop: "2px" }}>{status.lastError}</div>
+        )}
+      </div>
+      <div style={{ width: "160px", flexShrink: 0 }}>
+        <InteractiveHoverButton onClick={onSyncNow} disabled={syncing} compact>
+          {syncing ? "Syncing..." : "Sync now"}
+        </InteractiveHoverButton>
+      </div>
     </div>
   );
 }

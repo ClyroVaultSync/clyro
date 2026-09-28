@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
-import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, applyVaultChange } from './vaultManager';
+import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, applyVaultChange, syncPendingChanges } from './vaultManager';
+import { getSyncStatus, clearPendingChanges } from './syncQueue';
 import {
   getActiveProviderId,
   initiatePairing,
@@ -24,6 +25,13 @@ vi.mock('./vaultManager', () => ({
   vaultExists: vi.fn(),
   getVaultItems: vi.fn(),
   applyVaultChange: vi.fn(),
+  syncPendingChanges: vi.fn(),
+}));
+
+vi.mock('./syncQueue', () => ({
+  getSyncStatus: vi.fn(),
+  clearPendingChanges: vi.fn(),
+  SYNC_RETRY_ALARM: 'clyro-sync-retry',
 }));
 
 vi.mock('../providers', () => ({
@@ -130,13 +138,43 @@ describe('Background message routing', () => {
   });
 
   it('SAVE_VAULT_CHANGE forwards the change through unchanged', async () => {
-    (applyVaultChange as Mock).mockResolvedValue({ success: true });
+    (applyVaultChange as Mock).mockResolvedValue({ success: true, synced: true });
     const change = { upsert: [], deleteIds: ['gone'] };
 
     const response = await handleMessage({ type: 'SAVE_VAULT_CHANGE', change });
 
     expect(applyVaultChange).toHaveBeenCalledWith(change);
-    expect(response).toEqual({ success: true });
+    expect(response).toEqual({ success: true, data: { synced: true } });
+  });
+
+  it('SAVE_VAULT_CHANGE reports a change kept on this device as a success that has not synced', async () => {
+    (applyVaultChange as Mock).mockResolvedValue({ success: true, synced: false });
+
+    const response = await handleMessage({ type: 'SAVE_VAULT_CHANGE', change: { deleteIds: ['gone'] } });
+
+    expect(response).toEqual({ success: true, data: { synced: false } });
+  });
+
+  it('GET_SYNC_STATUS reports what is waiting, and for which provider', async () => {
+    (getSyncStatus as Mock).mockResolvedValue({ pendingCount: 2, lastError: 'Could not reach Google Drive.' });
+    (getActiveProviderId as Mock).mockResolvedValue('google-drive');
+
+    const response = await handleMessage({ type: 'GET_SYNC_STATUS' });
+
+    expect(response).toEqual({
+      success: true,
+      data: { pendingCount: 2, lastError: 'Could not reach Google Drive.', providerId: 'google-drive' },
+    });
+  });
+
+  it('SYNC_NOW runs a sync and reports the resulting status', async () => {
+    (syncPendingChanges as Mock).mockResolvedValue({ pendingCount: 0, lastError: null });
+    (getActiveProviderId as Mock).mockResolvedValue('dropbox');
+
+    const response = await handleMessage({ type: 'SYNC_NOW' });
+
+    expect(syncPendingChanges).toHaveBeenCalled();
+    expect(response).toEqual({ success: true, data: { pendingCount: 0, lastError: null, providerId: 'dropbox' } });
   });
 
   it('FIND_MATCHING_CREDENTIALS filters vault items by domain', async () => {
@@ -156,7 +194,7 @@ describe('Background message routing', () => {
 
   it('SAVE_NEW_CREDENTIAL adds a new item when no duplicate exists', async () => {
     (getVaultItems as Mock).mockResolvedValue({ success: true, data: [] });
-    (applyVaultChange as Mock).mockResolvedValue({ success: true });
+    (applyVaultChange as Mock).mockResolvedValue({ success: true, synced: true });
 
     const response = await handleMessage({
       type: 'SAVE_NEW_CREDENTIAL',
@@ -166,7 +204,7 @@ describe('Background message routing', () => {
     expect(applyVaultChange).toHaveBeenCalledWith({
       upsert: [expect.objectContaining({ username: 'me', url: 'example.com' })],
     });
-    expect(response).toEqual({ success: true, data: { updated: false } });
+    expect(response).toEqual({ success: true, data: { updated: false, synced: true } });
   });
 
   it('SAVE_NEW_CREDENTIAL updates the existing item instead of duplicating it', async () => {
@@ -174,7 +212,7 @@ describe('Background message routing', () => {
       success: true,
       data: [{ id: 'existing-1', name: 'Old', url: 'example.com', username: 'me', password: 'old', createdAt: 't0', updatedAt: 't0' }],
     });
-    (applyVaultChange as Mock).mockResolvedValue({ success: true });
+    (applyVaultChange as Mock).mockResolvedValue({ success: true, synced: false });
 
     const response = await handleMessage({
       type: 'SAVE_NEW_CREDENTIAL',
@@ -186,7 +224,7 @@ describe('Background message routing', () => {
     const change = (applyVaultChange as Mock).mock.calls[0][0];
     expect(change.upsert).toHaveLength(1);
     expect(change.upsert[0]).toEqual(expect.objectContaining({ id: 'existing-1', password: 'newpw', createdAt: 't0' }));
-    expect(response).toEqual({ success: true, data: { updated: true } });
+    expect(response).toEqual({ success: true, data: { updated: true, synced: false } });
   });
 
   it('GET_SETUP_STATE reports no provider when none is configured', async () => {
@@ -266,7 +304,7 @@ describe('Background message routing', () => {
     });
   });
 
-  it('CLEAR_PROVIDER clears all provider configs, vault key, and cache, and closes open vault tabs', async () => {
+  it('CLEAR_PROVIDER clears all provider configs, vault key, cache, and queued changes, and closes open vault tabs', async () => {
     (chrome.tabs.query as Mock).mockResolvedValueOnce([{ id: 42 }, { id: 43 }]);
 
     const response = await handleMessage({ type: 'CLEAR_PROVIDER' });
@@ -276,6 +314,7 @@ describe('Background message routing', () => {
     expect(clearDropboxConfig).toHaveBeenCalled();
     expect(clearVaultKey).toHaveBeenCalled();
     expect(clearCachedVaultBlob).toHaveBeenCalled();
+    expect(clearPendingChanges).toHaveBeenCalled();
     expect(chrome.tabs.query).toHaveBeenCalledWith({ url: expect.stringContaining('vault.html') });
     expect(chrome.tabs.remove).toHaveBeenCalledWith([42, 43]);
     expect(response).toEqual({ success: true });

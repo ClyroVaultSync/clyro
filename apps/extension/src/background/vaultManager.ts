@@ -2,7 +2,17 @@ import { deriveVaultKey, decryptVault, encryptVault, generateSalt } from '@clyro
 import { getVaultKey, setVaultKey, clearVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
 import { getActiveProvider } from '../providers';
-import type { SyncProvider, VaultItem, VaultData } from '@clyro/shared-types';
+import { NETWORK_ERROR, ProviderUnreachableError } from '../providers/errors';
+import {
+  readPendingChanges,
+  writePendingChanges,
+  clearPendingChanges,
+  getSyncStatus,
+  withSyncLock,
+  cancelSyncRetry,
+  type SyncStatus,
+} from './syncQueue';
+import type { SyncProvider, VaultItem, VaultData, VaultPayload } from '@clyro/shared-types';
 
 /**
  * Creates a brand-new, empty vault on the active Storage Provider: generates the
@@ -77,11 +87,15 @@ export async function unlockVault(masterPassword: string): Promise<{ success: bo
 
   try {
     await decryptVault(key, encryptedVault);
-    await setVaultKey(key);
-    return { success: true };
   } catch {
     return { success: false, error: 'Incorrect master password.' };
   }
+
+  await setVaultKey(key);
+  // Changes saved while offline can only be sent with the key, so unlocking is
+  // the first chance to send any left over from before the last lock.
+  syncInBackground();
+  return { success: true };
 }
 
 /**
@@ -118,16 +132,23 @@ export async function vaultExists(): Promise<boolean> {
   return cached !== null;
 }
 
+/**
+ * The vault's items as this device should show them: the provider's copy (or the
+ * offline cache), with any changes still waiting to sync applied on top — so a
+ * credential saved offline can be seen, copied, and autofilled straight away.
+ */
 export async function getVaultItems(): Promise<{ success: boolean; data?: VaultItem[]; error?: string }> {
   const key = await getVaultKey();
   if (!key) return { success: false, error: 'Vault is locked.' };
 
   let encryptedVault: string | null = null;
+  let providerReachable = false;
 
   const provider = await getActiveProvider();
   if (provider) {
     try {
       const vault = await provider.getVault();
+      providerReachable = true;
       if (vault) encryptedVault = vault.encryptedVault;
       else console.warn('getVaultItems(): provider reports no vault exists yet.');
     } catch (error) {
@@ -143,15 +164,26 @@ export async function getVaultItems(): Promise<{ success: boolean; data?: VaultI
     }
   }
 
-  if (!encryptedVault) return { success: true, data: [] };
-
-  try {
-    const decrypted = await decryptVault(key, encryptedVault);
-    const vaultData = JSON.parse(decrypted) as VaultData;
-    return { success: true, data: vaultData.items || [] };
-  } catch {
-    return { success: false, error: 'Failed to decrypt vault contents.' };
+  let items: VaultItem[] = [];
+  if (encryptedVault) {
+    try {
+      items = await decryptItems(key, encryptedVault);
+    } catch {
+      return { success: false, error: 'Failed to decrypt vault contents.' };
+    }
   }
+
+  const pending = await readPendingChanges(key);
+  // The provider just answered, so changes waiting on it can go now. Not awaited:
+  // this read shouldn't pay for a write.
+  if (pending.length > 0 && providerReachable) syncInBackground();
+
+  return { success: true, data: pending.reduce(applyChange, items) };
+}
+
+async function decryptItems(key: Uint8Array, encryptedVault: string): Promise<VaultItem[]> {
+  const vaultData = JSON.parse(await decryptVault(key, encryptedVault)) as VaultData;
+  return vaultData.items || [];
 }
 
 /**
@@ -196,80 +228,147 @@ export function applyChange(items: VaultItem[], change: VaultChange): VaultItem[
   return next;
 }
 
-/** The current vault blob and its version, from the provider or, if it's unreachable, the offline cache. */
-async function readCurrentVault(
-  provider: SyncProvider
-): Promise<{ encryptedVault: string | null; vaultVersion: number }> {
-  try {
-    const vault = await provider.getVault();
-    return { encryptedVault: vault?.encryptedVault ?? null, vaultVersion: vault?.vaultVersion ?? 0 };
-  } catch (error) {
-    console.warn('applyVaultChange(): provider unreachable when reading the current vault, falling back to cache.', error);
-    const cached = await getCachedVaultBlob();
-    return { encryptedVault: cached?.encryptedVault ?? null, vaultVersion: cached?.vaultVersion ?? 0 };
-  }
-}
-
 /**
- * Applies a change to the vault and writes it back, re-fetching and re-applying
- * on a version conflict rather than surfacing one to the user (docs/API.md
- * "the extension re-fetches and retries").
+ * Saves a change. It goes into the offline write queue first (syncQueue.ts), so
+ * it's stored before any network call, and then everything queued is sent.
  *
- * Every attempt applies the change to the vault as it exists *right now*, so
- * another device's concurrent additions always survive — this never writes back
- * an item list assembled from a stale read. It also decrypts the stored vault
- * before replacing it, which means a vault encrypted under a different master
- * password is refused instead of overwritten.
+ * - Sent: `synced: true`.
+ * - The provider couldn't be reached: still a success, with `synced: false`. The
+ *   change stays queued, is already visible through getVaultItems(), and goes out
+ *   on a later sync (docs/ARCHITECTURE.md "Offline Synchronization").
+ * - Any other failure takes back just this change and reports the error, so the
+ *   caller can keep the user's input; changes queued earlier stay queued.
  */
-export async function applyVaultChange(change: VaultChange): Promise<{ success: boolean; error?: string }> {
+export async function applyVaultChange(change: VaultChange): Promise<{ success: boolean; synced?: boolean; error?: string }> {
   const key = await getVaultKey();
   if (!key) return { success: false, error: 'Vault is locked.' };
 
   const provider = await getActiveProvider();
   if (!provider) return { success: false, error: 'No storage provider configured.' };
 
+  return withSyncLock(async () => {
+    const queued = [...(await readPendingChanges(key)), change];
+    await writePendingChanges(key, queued, null);
+
+    const outcome = await sendChanges(key, provider, queued);
+    if (outcome.status === 'failed') {
+      await writePendingChanges(key, queued.slice(0, -1), outcome.error);
+      return { success: false, error: outcome.error };
+    }
+
+    await recordOutcome(key, queued, outcome);
+    return { success: true, synced: outcome.status === 'synced' };
+  });
+}
+
+/**
+ * Sends whatever is waiting in the queue — the path for every sync that isn't a
+ * save: unlocking, the provider answering a read, the retry alarm, and "Sync
+ * now". Both the queue and the vault need the key, so nothing can be sent while
+ * the vault is locked; the retry alarm stops instead, and the next unlock picks
+ * the queue back up.
+ */
+export async function syncPendingChanges(): Promise<SyncStatus> {
+  return withSyncLock(async () => {
+    const key = await getVaultKey();
+    if (!key) {
+      cancelSyncRetry();
+      return getSyncStatus();
+    }
+
+    const provider = await getActiveProvider();
+    const changes = await readPendingChanges(key);
+    if (provider && changes.length > 0) {
+      await recordOutcome(key, changes, await sendChanges(key, provider, changes));
+    }
+    return getSyncStatus();
+  });
+}
+
+/** For triggers that shouldn't wait on the network. The queue records the outcome either way. */
+function syncInBackground(): void {
+  syncPendingChanges().catch((error) => console.warn('syncPendingChanges(): background sync failed.', error));
+}
+
+/**
+ * The vault blob with any changes still waiting to sync applied, re-encrypted —
+ * so a backup exported while offline isn't missing them.
+ */
+export async function withPendingChanges(key: Uint8Array, encryptedVault: string): Promise<string> {
+  const pending = await readPendingChanges(key);
+  if (pending.length === 0) return encryptedVault;
+
+  const vaultData: VaultData = { items: pending.reduce(applyChange, await decryptItems(key, encryptedVault)) };
+  return encryptVault(key, JSON.stringify(vaultData));
+}
+
+type SendOutcome = { status: 'synced' } | { status: 'unreachable'; error: string } | { status: 'failed'; error: string };
+
+/** Empties the queue once it's sent; otherwise keeps it, with the reason, which also schedules a retry. */
+async function recordOutcome(key: Uint8Array, changes: VaultChange[], outcome: SendOutcome): Promise<void> {
+  if (outcome.status === 'synced') await clearPendingChanges();
+  else await writePendingChanges(key, changes, outcome.error);
+}
+
+/**
+ * Applies the changes, in order, to the vault as the provider holds it right now
+ * and writes the result back as one new version, re-fetching and re-applying on
+ * a version conflict rather than surfacing one (docs/API.md "the extension
+ * re-fetches and retries").
+ *
+ * Every attempt starts from a fresh read, never the cache, so another device's
+ * concurrent additions always survive — this never writes back an item list
+ * assembled from a stale read. It decrypts the stored vault before replacing it,
+ * so a vault encrypted under a different master password is refused instead of
+ * overwritten. And because the changes are intents, sending the same ones twice
+ * (the worker stopping after the write but before the queue was cleared) is
+ * harmless.
+ */
+async function sendChanges(key: Uint8Array, provider: SyncProvider, changes: VaultChange[]): Promise<SendOutcome> {
   for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt++) {
-    const current = await readCurrentVault(provider);
+    let current: VaultPayload | null;
+    try {
+      current = await provider.getVault();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to read the vault.';
+      return { status: error instanceof ProviderUnreachableError ? 'unreachable' : 'failed', error: message };
+    }
 
     let currentItems: VaultItem[] = [];
-    if (current.encryptedVault) {
+    if (current) {
       try {
-        const vaultData = JSON.parse(await decryptVault(key, current.encryptedVault)) as VaultData;
-        currentItems = vaultData.items || [];
+        currentItems = await decryptItems(key, current.encryptedVault);
       } catch {
-        return { success: false, error: 'Failed to decrypt vault contents.' };
+        return { status: 'failed', error: 'Failed to decrypt vault contents.' };
       }
     }
 
     let encryptedVault: string;
     try {
-      const vaultData: VaultData = { items: applyChange(currentItems, change) };
+      const vaultData: VaultData = { items: changes.reduce(applyChange, currentItems) };
       encryptedVault = await encryptVault(key, JSON.stringify(vaultData));
     } catch {
-      return { success: false, error: 'Encryption failed.' };
+      return { status: 'failed', error: 'Encryption failed.' };
     }
 
-    const result = await provider.updateVault({ encryptedVault, vaultVersion: current.vaultVersion + 1 });
+    const vaultVersion = (current?.vaultVersion ?? 0) + 1;
+    const result = await provider.updateVault({ encryptedVault, vaultVersion });
 
     if (result.success) {
-      try {
-        const refreshed = await provider.getVault();
-        if (refreshed) await setCachedVaultBlob(refreshed.encryptedVault, refreshed.vaultVersion, refreshed.vaultSalt);
-      } catch {
-        // best-effort cache refresh; the write itself already succeeded
-      }
-      return { success: true };
+      // Every provider stores exactly what it was sent, so the cache can take this
+      // without downloading it again.
+      if (current) await setCachedVaultBlob(encryptedVault, vaultVersion, current.vaultSalt);
+      return { status: 'synced' };
     }
 
-    if (result.error.code !== 'CONFLICT') {
-      return { success: false, error: result.error.message || 'Failed to save vault.' };
-    }
+    if (result.error.code === NETWORK_ERROR) return { status: 'unreachable', error: result.error.message };
+    if (result.error.code !== 'CONFLICT') return { status: 'failed', error: result.error.message || 'Failed to save vault.' };
 
-    console.warn(`applyVaultChange(): version conflict on attempt ${attempt}, re-fetching and retrying.`);
+    console.warn(`sendChanges(): version conflict on attempt ${attempt}, re-fetching and retrying.`);
   }
 
   return {
-    success: false,
+    status: 'failed',
     error: 'Sync conflict: the vault kept changing elsewhere while saving. Please refresh and try again.',
   };
 }

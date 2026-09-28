@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DropboxProvider, connectDropbox, setDropboxConfig, getDropboxConfig, clearDropboxConfig } from './dropbox';
+import { ProviderUnreachableError } from './errors';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockStorage = new Map<string, any>();
@@ -190,6 +191,38 @@ describe('DropboxProvider', () => {
     const provider = new DropboxProvider();
 
     expect(await provider.deleteVault()).toEqual({ success: true });
+  });
+
+  it('getVault() throws ProviderUnreachableError with no connection', async () => {
+    await setDropboxConfig(validConfig);
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const provider = new DropboxProvider();
+
+    await expect(provider.getVault()).rejects.toBeInstanceOf(ProviderUnreachableError);
+  });
+
+  it('getVault() throws ProviderUnreachableError when an expired token cannot be refreshed offline', async () => {
+    await setDropboxConfig({ ...validConfig, accessTokenExpiresAt: 0 });
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const provider = new DropboxProvider();
+
+    await expect(provider.getVault()).rejects.toBeInstanceOf(ProviderUnreachableError);
+    expect(fetch).toHaveBeenCalledWith('https://api.dropboxapi.com/oauth2/token', expect.anything());
+  });
+
+  it('updateVault() reports NETWORK_ERROR with no connection, and while Dropbox is rate-limiting', async () => {
+    await setDropboxConfig(validConfig);
+    const provider = new DropboxProvider();
+
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    expect(await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 })).toEqual({
+      success: false,
+      error: { code: 'NETWORK_ERROR', message: 'Could not reach Dropbox.' },
+    });
+
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({}, { status: 429 }));
+    const result = await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 });
+    expect((result as { error: { code: string } }).error.code).toBe('NETWORK_ERROR');
   });
 
   it('isConnected() is true when a valid token is available', async () => {

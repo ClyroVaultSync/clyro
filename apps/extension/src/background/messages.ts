@@ -6,6 +6,8 @@ export type BackgroundMessage =
   | { type: 'GET_VAULT_EXISTS' }
   | { type: 'GET_VAULT_ITEMS' }
   | { type: 'SAVE_VAULT_CHANGE'; change: { upsert?: import('@clyro/shared-types').VaultItem[]; deleteIds?: string[] } }
+  | { type: 'GET_SYNC_STATUS' }
+  | { type: 'SYNC_NOW' }
   | { type: 'FIND_MATCHING_CREDENTIALS'; domain: string }
   | { type: 'SAVE_NEW_CREDENTIAL'; item: { name: string; url: string; username: string; password: string; notes?: string } }
   | { type: 'STASH_PENDING_CREDENTIAL'; item: { url: string; username: string; password: string } }

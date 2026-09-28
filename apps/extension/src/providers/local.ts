@@ -1,4 +1,5 @@
 import type { SyncProvider, VaultPayload, VaultUpdatePayload, SyncResult } from '@clyro/shared-types';
+import { NETWORK_ERROR, ProviderUnreachableError, fetchOrUnreachable } from './errors';
 
 export interface LocalProviderConfig {
   baseUrl: string;
@@ -24,19 +25,24 @@ type ApiResponse<T> =
   | { success: true; data: T }
   | { success: false; error: { code: string; message: string; details?: unknown } };
 
+/** Any failure to get a JSON answer back — the server off, hung, or erroring — reads as NETWORK_ERROR, which vaultManager treats as "keep the change queued". */
 async function request<T>(config: LocalProviderConfig, path: string, init?: RequestInit): Promise<ApiResponse<T>> {
   try {
-    const res = await fetch(`${config.baseUrl}/api/v1${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.pairingToken}`,
-        ...(init?.headers || {}),
+    const res = await fetchOrUnreachable(
+      `${config.baseUrl}/api/v1${path}`,
+      {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.pairingToken}`,
+          ...(init?.headers || {}),
+        },
       },
-    });
+      'the Local Sync Server'
+    );
     return (await res.json()) as ApiResponse<T>;
   } catch {
-    return { success: false, error: { code: 'NETWORK_ERROR', message: 'Could not reach the Local Sync Server.' } };
+    return { success: false, error: { code: NETWORK_ERROR, message: 'Could not reach the Local Sync Server.' } };
   }
 }
 
@@ -50,6 +56,7 @@ export class LocalProvider implements SyncProvider {
     const res = await request<VaultPayload>(this.config, '/vault');
     if (res.success) return res.data;
     if (res.error.code === 'NOT_FOUND') return null;
+    if (res.error.code === NETWORK_ERROR) throw new ProviderUnreachableError(res.error.message);
     throw new Error(res.error.message);
   }
 

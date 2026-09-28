@@ -1,7 +1,9 @@
 import { deriveVaultKey, decryptVault } from '@clyro/crypto';
-import { setVaultKey } from '../storage/sessionStorage';
+import { getVaultKey, setVaultKey } from '../storage/sessionStorage';
 import { getCachedVaultBlob, setCachedVaultBlob } from '../storage/localStorage';
 import { getActiveProvider } from '../providers';
+import { withPendingChanges } from '../background/vaultManager';
+import { clearPendingChanges, getSyncStatus } from '../background/syncQueue';
 
 /**
  * The .clyro export file shape. Every field is already encrypted or non-secret
@@ -41,8 +43,20 @@ export function parseExportFile(raw: string): VaultExportFile {
   return file as VaultExportFile;
 }
 
-/** Reads the current vault (provider, falling back to cache) and packages it for download. */
+/**
+ * Reads the current vault (provider, falling back to cache) and packages it for
+ * download — including any changes still waiting to sync, which exist nowhere
+ * else yet. Merging those in needs the vault key, so while changes are waiting,
+ * exporting needs the vault unlocked.
+ */
 export async function exportVault(): Promise<{ success: boolean; data?: VaultExportFile; error?: string }> {
+  const { pendingCount } = await getSyncStatus();
+  const key = await getVaultKey();
+  if (pendingCount > 0 && !key) {
+    const changes = pendingCount === 1 ? '1 change' : `${pendingCount} changes`;
+    return { success: false, error: `Unlock the vault first, so the ${changes} waiting to sync are included in the backup.` };
+  }
+
   const provider = await getActiveProvider();
   let vault: { encryptedVault: string; vaultVersion: number; vaultSalt: string } | null = null;
 
@@ -60,7 +74,16 @@ export async function exportVault(): Promise<{ success: boolean; data?: VaultExp
 
   if (!vault) return { success: false, error: 'No vault to export.' };
 
-  return { success: true, data: buildExportFile(vault.encryptedVault, vault.vaultVersion, vault.vaultSalt) };
+  let encryptedVault = vault.encryptedVault;
+  if (pendingCount > 0 && key) {
+    try {
+      encryptedVault = await withPendingChanges(key, vault.encryptedVault);
+    } catch {
+      return { success: false, error: 'Failed to decrypt vault contents.' };
+    }
+  }
+
+  return { success: true, data: buildExportFile(encryptedVault, vault.vaultVersion, vault.vaultSalt) };
 }
 
 /**
@@ -106,5 +129,7 @@ export async function importVault(rawFileContents: string, masterPassword: strin
 
   await setCachedVaultBlob(file.encryptedVault, file.vaultVersion, file.vaultSalt);
   await setVaultKey(key);
+  // Anything still queued was made against the vault this import just replaced.
+  await clearPendingChanges();
   return { success: true };
 }

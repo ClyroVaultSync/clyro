@@ -1,4 +1,5 @@
 import type { SyncProvider, VaultPayload, VaultUpdatePayload, SyncResult } from '@clyro/shared-types';
+import { fetchOrUnreachable, errorCode } from './errors';
 
 export interface DropboxProviderConfig {
   connected: true;
@@ -75,11 +76,15 @@ interface TokenResponse {
 }
 
 async function requestToken(params: Record<string, string>): Promise<TokenResponse> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(params),
-  });
+  const res = await fetchOrUnreachable(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params),
+    },
+    'Dropbox'
+  );
   if (!res.ok) throw new Error(`Dropbox token request failed (${res.status}).`);
   return (await res.json()) as TokenResponse;
 }
@@ -148,7 +153,7 @@ async function getValidAccessToken(): Promise<string> {
 /** Wraps fetch with the current Dropbox token, retrying once with a forced refresh on a 401. */
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
   let token = await getValidAccessToken();
-  let res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+  let res = await fetchOrUnreachable(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } }, 'Dropbox');
 
   if (res.status === 401) {
     const config = await getDropboxConfig();
@@ -156,7 +161,7 @@ async function authorizedFetch(url: string, init?: RequestInit): Promise<Respons
     const tokens = await requestToken({ grant_type: 'refresh_token', refresh_token: config.refreshToken, client_id: DROPBOX_CLIENT_ID });
     await setDropboxConfig({ ...config, accessToken: tokens.access_token, accessTokenExpiresAt: Date.now() + tokens.expires_in * 1000 });
     token = tokens.access_token;
-    res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+    res = await fetchOrUnreachable(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } }, 'Dropbox');
   }
 
   return res;
@@ -244,7 +249,7 @@ export class DropboxProvider implements SyncProvider {
       if (error instanceof DropboxConflictError) {
         return { success: false, error: { code: 'CONFLICT', message: 'A vault already exists on Dropbox.' } };
       }
-      return { success: false, error: { code: 'DROPBOX_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DROPBOX_ERROR'), message: errorMessage(error) } };
     }
   }
 
@@ -271,7 +276,7 @@ export class DropboxProvider implements SyncProvider {
       if (error instanceof DropboxConflictError) {
         return { success: false, error: { code: 'CONFLICT', message: 'Vault was modified elsewhere; please refresh and try again.' } };
       }
-      return { success: false, error: { code: 'DROPBOX_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DROPBOX_ERROR'), message: errorMessage(error) } };
     }
   }
 
@@ -294,7 +299,7 @@ export class DropboxProvider implements SyncProvider {
 
       return { success: true };
     } catch (error) {
-      return { success: false, error: { code: 'DROPBOX_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DROPBOX_ERROR'), message: errorMessage(error) } };
     }
   }
 

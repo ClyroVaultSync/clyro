@@ -332,7 +332,7 @@ Talks to the Local Sync Server over `http://localhost:PORT`, authenticated with 
 
 ### GoogleDriveProvider
 
-OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. `updateVault()` therefore re-reads the stored version immediately before writing and returns `CONFLICT` on a mismatch, leaving the retry to `applyVaultChange()`. A small read-then-write race remains that Drive cannot close. See [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
+OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. `updateVault()` therefore re-reads the stored version immediately before writing and returns `CONFLICT` on a mismatch, leaving the retry to `vaultManager.ts`. A small read-then-write race remains that Drive cannot close. See [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
 
 Drive previously wrote a timestamped **conflict copy** file on a mismatch. That was removed once retry existed: the copy landed in the app-only `appDataFolder`, which the user cannot browse and the extension has no UI to restore from, so it was not a recovery path in practice — only an undiscoverable file accumulating on every conflict.
 
@@ -703,17 +703,26 @@ Version 1.0 uses **optimistic concurrency via `vaultVersion`**:
 - **Local Sync Server and Dropbox**: the provider enforces this atomically (SQLite transaction / Dropbox `rev`).
 - **Google Drive**: no atomic precondition exists, so `GoogleDriveProvider` re-reads the stored version immediately before writing and reports the conflict itself. A small race remains that Drive cannot close.
 
-A rejected write is retried automatically rather than shown to the user. `applyVaultChange()` in `background/vaultManager.ts` re-fetches the current vault, re-applies the change, and writes again, up to three attempts.
+A rejected write is retried automatically rather than shown to the user. `background/vaultManager.ts` re-fetches the current vault, re-applies the change, and writes again, up to three attempts — for a save and for a sync of changes queued offline alike.
 
 What makes that safe is that a save carries **the change** (an upsert of specific items, or a delete of specific ids) rather than a replacement item list. The extension therefore never writes back a list assembled from a stale read, so a concurrent write from another device survives untouched — it is present in the vault each attempt re-fetches. Conflicting edits to the *same* item still resolve last-write-wins.
 
-`applyVaultChange()` also decrypts the stored vault before replacing it, so a vault encrypted under a different master password is refused rather than overwritten.
+Every write also decrypts the stored vault before replacing it, so a vault encrypted under a different master password is refused rather than overwritten.
 
 This approach prioritizes not losing data over merging conflicting edits to a single item. Future versions may introduce field-level merge or conflict history.
 
 # Offline Synchronization
 
 The extension remains fully functional while offline, via its local encrypted cache. Users can view, add, edit, and delete credentials, and generate and autofill passwords. All changes remain encrypted locally until synchronization to the active Storage Provider becomes possible.
+
+This works through an **offline write queue** (`background/syncQueue.ts`):
+
+- **Every save is queued first**, then sent. The queue holds the changes themselves (the same upsert/delete intents described under [Conflict Resolution](#conflict-resolution)), in the order they were made, encrypted with the vault key in `chrome.storage.local`. Only a count and the last sync error are stored unencrypted, so the extension can say changes are waiting while the vault is locked.
+- **"Unreachable" is not a failure.** A provider that can't be reached (no connection, a timeout after 15 seconds, or an HTTP 5xx/429 from the service) leaves the change queued and the save succeeds. Any other failure — a refused login, a vault encrypted under a different master password, a conflict that won't settle — takes that change back out and is reported as before.
+- **Queued changes are visible immediately.** Reads apply them on top of the provider's copy or the cache, so they can be viewed, copied, and autofilled before they sync.
+- **A sync applies every queued change, in order, to the vault as the provider currently holds it, and writes the result as one new version**, with the same conflict retry as a save. Re-sending changes that already landed (for example, if the service worker stopped between the write and clearing the queue) is harmless, because they are intents rather than a replacement item list.
+- **Triggers:** the next save; unlocking the vault; the provider answering any read; a retry every minute (`chrome.alarms`) while changes are waiting and the vault is unlocked; and **Sync now** on the vault page. Nothing is sent while the vault is locked, since both the queue and the vault need the key.
+- **Limits:** until they sync, queued changes exist only in this browser profile. Disconnecting the provider discards them (the confirm dialog says how many), as does importing a vault, since they belong to the vault being replaced. Export includes them, and needs the vault unlocked while any are waiting. Conflicting edits to the same item are last-write-wins by *sync* time, not edit time.
 
 # Synchronization Security
 

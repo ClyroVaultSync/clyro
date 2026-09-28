@@ -1,4 +1,5 @@
 import type { SyncProvider, VaultPayload, VaultUpdatePayload, SyncResult } from '@clyro/shared-types';
+import { ProviderUnreachableError, fetchOrUnreachable, errorCode } from './errors';
 
 export interface GoogleDriveProviderConfig {
   connected: true;
@@ -41,22 +42,34 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Google Drive request failed.';
 }
 
-/** The token cache (see chrome.identity docs) makes it cheap to call this non-interactively before every request. */
+/**
+ * The token cache (see chrome.identity docs) makes it cheap to call this non-interactively before every request.
+ * Chrome can't refresh an expired token without a connection, so a failure while the browser is offline is
+ * unreachability, not a sign-in problem.
+ */
 async function getToken(interactive: boolean): Promise<string> {
-  const result = await chrome.identity.getAuthToken({ interactive });
-  if (!result.token) throw new Error('Not signed in to Google, or Drive access was not granted.');
-  return result.token;
+  let token: string | undefined;
+  try {
+    ({ token } = await chrome.identity.getAuthToken({ interactive }));
+  } catch (error) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new ProviderUnreachableError('Could not reach Google Drive.');
+    }
+    throw error;
+  }
+  if (!token) throw new Error('Not signed in to Google, or Drive access was not granted.');
+  return token;
 }
 
 /** Wraps fetch with the current Drive token, retrying once with a fresh token on a 401. */
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
   let token = await getToken(false);
-  let res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+  let res = await fetchOrUnreachable(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } }, 'Google Drive');
 
   if (res.status === 401) {
     await chrome.identity.removeCachedAuthToken({ token });
     token = await getToken(false);
-    res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+    res = await fetchOrUnreachable(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) } }, 'Google Drive');
   }
 
   return res;
@@ -173,7 +186,7 @@ export class GoogleDriveProvider implements SyncProvider {
       await setCachedFileId(fileId);
       return { success: true };
     } catch (error) {
-      return { success: false, error: { code: 'DRIVE_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DRIVE_ERROR'), message: errorMessage(error) } };
     }
   }
 
@@ -200,7 +213,7 @@ export class GoogleDriveProvider implements SyncProvider {
       await overwriteFile(fileId, { ...payload, vaultSalt: current.vaultSalt });
       return { success: true };
     } catch (error) {
-      return { success: false, error: { code: 'DRIVE_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DRIVE_ERROR'), message: errorMessage(error) } };
     }
   }
 
@@ -214,7 +227,7 @@ export class GoogleDriveProvider implements SyncProvider {
       await clearCachedFileId();
       return { success: true };
     } catch (error) {
-      return { success: false, error: { code: 'DRIVE_ERROR', message: errorMessage(error) } };
+      return { success: false, error: { code: errorCode(error, 'DRIVE_ERROR'), message: errorMessage(error) } };
     }
   }
 

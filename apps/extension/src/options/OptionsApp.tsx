@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import InteractiveHoverButton from "../popup/InteractiveHoverButton";
+import { getDisconnectWarning } from "../popup/disconnectWarning";
 import "./OptionsApp.css";
 
 interface SetupState {
@@ -38,12 +39,7 @@ export function OptionsApp() {
   }, []);
 
   const handleDisconnect = async () => {
-    if (
-      !window.confirm(
-        "Disconnect this storage provider? Your vault stays where it is — export it first if you don't have a backup, since reconnecting will need either the same provider again or an import."
-      )
-    )
-      return;
+    if (!window.confirm(await getDisconnectWarning())) return;
     setLoading(true);
     try {
       const res = await chrome.runtime.sendMessage({ type: "CLEAR_PROVIDER" });

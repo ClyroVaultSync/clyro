@@ -6,6 +6,7 @@ import {
   getGoogleDriveConfig,
   clearGoogleDriveConfig,
 } from './googleDrive';
+import { ProviderUnreachableError } from './errors';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockStorage = new Map<string, any>();
@@ -171,6 +172,59 @@ describe('GoogleDriveProvider', () => {
     const provider = new GoogleDriveProvider();
 
     expect(await provider.deleteVault()).toEqual({ success: true });
+  });
+
+  it('getVault() throws ProviderUnreachableError with no connection', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const provider = new GoogleDriveProvider();
+
+    await expect(provider.getVault()).rejects.toBeInstanceOf(ProviderUnreachableError);
+  });
+
+  it('updateVault() reports NETWORK_ERROR with no connection, and while Drive is down', async () => {
+    const provider = new GoogleDriveProvider();
+
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    expect(await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 })).toEqual({
+      success: false,
+      error: { code: 'NETWORK_ERROR', message: 'Could not reach Google Drive.' },
+    });
+
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({}, false, 503));
+    const result = await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 });
+    expect((result as { error: { code: string } }).error.code).toBe('NETWORK_ERROR');
+  });
+
+  it('updateVault() still reports DRIVE_ERROR for a request Drive refuses', async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({}, false, 403));
+    const provider = new GoogleDriveProvider();
+
+    const result = await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 });
+
+    expect((result as { error: { code: string } }).error.code).toBe('DRIVE_ERROR');
+  });
+
+  it('a token failure while the browser is offline counts as unreachable, not as signed out', async () => {
+    (chrome.identity.getAuthToken as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('OAuth2 request failed'));
+    const provider = new GoogleDriveProvider();
+
+    vi.stubGlobal('navigator', { onLine: false });
+    try {
+      expect(await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 })).toEqual({
+        success: false,
+        error: { code: 'NETWORK_ERROR', message: 'Could not reach Google Drive.' },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    vi.stubGlobal('navigator', { onLine: true });
+    try {
+      const result = await provider.updateVault({ encryptedVault: 'new', vaultVersion: 2 });
+      expect((result as { error: { code: string } }).error.code).toBe('DRIVE_ERROR');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('isConnected() is false when getAuthToken fails', async () => {
