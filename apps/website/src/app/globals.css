@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Locked design tokens — see knowledge/Features/Website UI Redesign.md.
+ * Locked design tokens: a flat dark theme with a single purple accent.
  * Tailwind v4 auto-generates utilities from these (bg-accent, text-heading,
  * rounded-md, font-sans, ...). Do not reintroduce gradients/blur/glow here.
  */

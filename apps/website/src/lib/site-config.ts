@@ -13,8 +13,8 @@
 
 /** Stable extension ID, derived from the public `key` committed to
  * apps/extension/manifest.json. The bridge in `extension-bridge.ts` targets it
- * directly, so it must stay in sync with the manifest — see
- * docs/EXTENSION_HANDOFF.md, which forbids regenerating it. */
+ * directly, so it must stay in sync with the manifest. Never regenerate the
+ * manifest key: that would change this ID. */
 const EXTENSION_ID = process.env.NEXT_PUBLIC_CLYRO_EXTENSION_ID || 'cdaicnajdmjjdmghjblobeegdbdniiif';
 
 const GITHUB_REPO = process.env.NEXT_PUBLIC_CLYRO_GITHUB_URL || 'https://github.com/ClyroVaultSync/clyro';

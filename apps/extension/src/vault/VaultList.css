@@ -1,5 +1,5 @@
-/* Locked design tokens (knowledge/Features/Website UI Redesign.md), same
-   values InteractiveHoverButton.css hardcodes for this extension since it
+/* Locked design tokens (the website's @theme in apps/website/src/app/globals.css),
+   same values InteractiveHoverButton.css hardcodes for this extension since it
    has no shared token system. */
 
 .vault-row {

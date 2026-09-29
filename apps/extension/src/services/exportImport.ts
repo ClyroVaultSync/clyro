@@ -7,8 +7,8 @@ import { clearPendingChanges, getSyncStatus } from '../background/syncQueue';
 
 /**
  * The .clyro export file shape. Every field is already encrypted or non-secret
- * (docs/EXTENSION_HANDOFF.md §7) — this is the vault's only recovery path and
- * the only way to move it between storage providers.
+ * (docs/ARCHITECTURE.md → "Export / Import") — this is the vault's only
+ * recovery path and the only way to move it between storage providers.
  */
 export interface VaultExportFile {
   version: 1;

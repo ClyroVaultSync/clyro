@@ -155,8 +155,7 @@ async function overwriteFile(fileId: string, payload: VaultPayload): Promise<voi
  * be rejected atomically — updateVault() re-reads the stored version immediately
  * before writing and reports CONFLICT on a mismatch, leaving it to vaultManager's
  * applyVaultChange() to re-apply the change to the newer vault and write again.
- * That leaves a small inherent race Drive cannot close. See
- * knowledge/Features/Local-First Architecture.md.
+ * That leaves a small inherent race Drive cannot close.
  */
 export class GoogleDriveProvider implements SyncProvider {
   id = 'google-drive' as const;

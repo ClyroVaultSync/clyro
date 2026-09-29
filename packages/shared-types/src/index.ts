@@ -34,7 +34,7 @@ export type SyncResult = { success: true } | { success: false; error: { code: st
 
 /** Implemented by LocalProvider, GoogleDriveProvider, DropboxProvider (Phase 4).
  * `vaultManager.ts` and everything above it depends only on this interface, never
- * on which provider is active. See knowledge/Features/Local-First Architecture.md. */
+ * on which provider is active (docs/ARCHITECTURE.md → "Sync Provider"). */
 export interface SyncProvider {
   id: SyncProviderId;
   getVault(): Promise<VaultPayload | null>;
