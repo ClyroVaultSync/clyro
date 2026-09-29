@@ -44,7 +44,7 @@ The database design follows these principles:
 
 # Engine
 
-**SQLite, bundled with the Local Sync Server.** The application creates and initializes `clyro.db` on first launch. There is no configuration wizard and no choice of database engine in Version 1.0 — the bring-your-own-database option considered during planning was cut to keep the server small and dependency-free. See `docs/ARCHITECTURE.md`'s Local Sync Server section.
+**SQLite, bundled with the Local Sync Server.** The application creates and initializes `clyro.db` on first launch, creating its folder if needed. The Windows installer keeps it at `%LOCALAPPDATA%\Clyro\clyro.db`, apart from the program files, so upgrading, reinstalling or uninstalling never touches it unless the user explicitly chooses to delete it during uninstall. Elsewhere its location is set by the `DB_PATH` environment variable, which defaults to `./clyro.db`. There is no configuration wizard and no choice of database engine in Version 1.0 — the bring-your-own-database option considered during planning was cut to keep the server small and dependency-free. See `docs/ARCHITECTURE.md`'s Local Sync Server section.
 
 Access is via direct SQLite queries, not an ORM.
 

@@ -1,6 +1,11 @@
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 const DB_PATH = process.env.DB_PATH || './clyro.db';
+
+// The installed app points DB_PATH into %LOCALAPPDATA%\Clyro, which won't exist on first launch.
+mkdirSync(dirname(DB_PATH), { recursive: true });
 
 export const db = new DatabaseSync(DB_PATH);
 

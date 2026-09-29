@@ -157,3 +157,7 @@ apps/extension/clyro-extension-key.pem
 apps/backend/*.db
 apps/backend/*.db-wal
 apps/backend/*.db-shm
+
+# Local Sync Server's Windows build output (installer, packed exes, intermediates) from
+# `pnpm --filter @clyro/backend package:win`
+apps/backend/release/

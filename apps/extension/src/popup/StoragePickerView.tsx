@@ -6,7 +6,7 @@ interface Props {
   onProviderConnected: () => void;
 }
 
-const DEFAULT_LOCAL_URL = "http://localhost:8080";
+const DEFAULT_LOCAL_URL = "http://localhost:47821";
 const PROVIDER_ITEMS = ["Local Sync Server", "Google Drive", "Dropbox"];
 
 type View = "choose" | "local-form" | "connecting-google-drive" | "connecting-dropbox";

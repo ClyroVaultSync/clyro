@@ -95,9 +95,15 @@ export default function LocalSetupPage() {
               <h3 className="text-lg font-semibold">Install &amp; run it</h3>
             </div>
             <p className="text-sm text-body">
-              Run the installer, then start the Local Sync Server. It listens on your own machine only
-              (<code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">http://localhost</code>)
+              Run the installer. The Local Sync Server starts right away and again every time you sign
+              in to Windows — look for the Clyro icon near the clock. It listens on your own machine
+              only (<code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">http://localhost:47821</code>)
               — nothing outside your network can reach it.
+            </p>
+            <p className="text-sm text-body">
+              The installer isn’t code-signed yet, so Windows may show “Windows protected
+              your PC”. Choose <span className="text-heading">More info → Run anyway</span> to
+              continue.
             </p>
             <p className="text-sm text-body">
               Running the same binary on a home server or VPS instead of pure <code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">localhost</code> is

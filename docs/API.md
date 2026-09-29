@@ -58,7 +58,7 @@ Authorization: Bearer <pairingToken>
 
 Requests missing this header, or presenting an invalid pairing token, receive a `401 UNAUTHORIZED` response. There is no login endpoint, no refresh flow, and no concept of an expiring session token — the pairing token is a long-lived device credential, revoked and reissued only by re-pairing.
 
-The server additionally enforces an Origin allowlist (the extension's own origin, plus `http://localhost:3000` in development) on top of the pairing token, for requests that carry an `Origin` header at all. A request with an `Origin` header that doesn't match the allowlist is rejected with `401 UNAUTHORIZED`, same as a missing/invalid pairing token. A request with **no** `Origin` header is not rejected on that basis alone — Chrome does not attach one to a plain GET `fetch()` from an extension service worker to a `host_permissions`-covered target (confirmed 2026-09-04), even though it reliably does for POST/PUT/DELETE from the same code. The pairing token remains mandatory on every request regardless of Origin.
+The server additionally enforces an Origin allowlist (the extension's own origin, plus `http://localhost:3000` in development) on top of the pairing token, for requests that carry an `Origin` header at all. A request with an `Origin` header that doesn't match the allowlist is rejected with `401 UNAUTHORIZED`, same as a missing/invalid pairing token. A request with **no** `Origin` header is not rejected on that basis alone — Chrome does not attach one to a plain GET `fetch()` from an extension service worker to a `host_permissions`-covered target (confirmed 2026-09-04), even though it reliably does for POST/PUT/DELETE from the same code. The pairing token remains mandatory on every request regardless of Origin. The one place Origin is stricter is `POST /api/v1/pairing/initiate`, which requires an allowlisted `Origin`. See the Pairing API below.
 
 ---
 
@@ -82,11 +82,11 @@ Issues and validates the pairing token used to authenticate the extension to thi
 
 **POST /api/v1/pairing/initiate**
 
-Called once, during first-run Local setup, to obtain a pairing token. In the default `localhost` deployment this is effectively unauthenticated (anyone reaching `localhost:PORT` is assumed to be the machine's own user); a remote deployment (home server/VPS) should gate this endpoint behind an out-of-band shared secret configured at server install time — see `docs/ARCHITECTURE.md`'s Local Sync Server section.
+Called once, during first-run Local setup, to obtain a pairing token. It needs no pairing token, since it is how one is obtained. It does require an `Origin` header on the allowlist: a request with no `Origin`, or with any other origin, gets `401 UNAUTHORIZED` and no token is issued. Chrome always attaches the extension's origin to this POST, so the Clyro extension can pair. Web pages and other browser extensions send their own origin, so they cannot. This does not stop other software on the same machine, which can set any header, but that software could read `clyro.db` directly anyway. A remote deployment (home server/VPS) should additionally gate this endpoint behind an out-of-band shared secret configured at server install time — see `docs/ARCHITECTURE.md`'s Local Sync Server section.
 
 **Authentication Required**
 
-No
+No pairing token. An allowlisted `Origin` header is required.
 
 **Request Body**
 
@@ -105,6 +105,7 @@ None (or, for a remote deployment, an install-time shared secret — finalize at
 
 **Error Responses**
 
+- 401 UNAUTHORIZED — the `Origin` header is missing or not on the allowlist
 - 403 FORBIDDEN — a remote deployment rejected the request (missing/invalid shared secret)
 
 ---

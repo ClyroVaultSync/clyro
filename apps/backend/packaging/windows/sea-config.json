@@ -1,0 +1,6 @@
+{
+  "main": "release/build/server.cjs",
+  "output": "release/build/sea-prep.blob",
+  "disableExperimentalSEAWarning": true,
+  "execArgv": ["--no-warnings"]
+}

@@ -6,7 +6,8 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package:win": "node scripts/build-windows.mjs"
   },
   "dependencies": {
     "@clyro/shared-types": "workspace:*",
@@ -16,6 +17,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "postject": "1.0.0-alpha.6",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0",
     "vitest": "^4.1.10"

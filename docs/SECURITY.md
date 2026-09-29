@@ -408,6 +408,7 @@ The Local Sync Server is not a Clyro-run service — each user runs their own in
 - The extension stores the token and sends it with every request.
 - The server rejects any request without a valid token.
 - The server additionally enforces an Origin allowlist, so only the Clyro extension (and, in development, `localhost:3000`) may call it.
+- Pairing itself (`POST /api/v1/pairing/initiate`, the one endpoint that needs no token) requires an allowlisted `Origin` to be *present*. Web pages and other browser extensions always send their own origin, so they cannot obtain a token. The server is always running once installed, which is why this is stricter than the vault routes, where a missing `Origin` on a GET is tolerated.
 
 ## What the Local Sync Server Never Does
 
@@ -423,7 +424,7 @@ It stores and returns exactly one thing: an opaque encrypted vault blob, its ver
 
 ## Database Security
 
-The Local Sync Server's SQLite database (`clyro.db`) stores only:
+The Local Sync Server's SQLite database (`clyro.db`, at `%LOCALAPPDATA%\Clyro\clyro.db` for the Windows installer) stores only:
 
 - The encrypted vault blob
 - Its `vaultVersion`

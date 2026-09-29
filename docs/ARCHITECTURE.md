@@ -483,6 +483,30 @@ There is no Clyro account, so the server does not perform:
 - Runs as an auto-starting background process (system tray style) — the user never manually starts or restarts it after install.
 - Running the same binary on a home server or VPS instead of pure `localhost` is a supported, documented deployment of the identical server, not a second code path. The pairing token is what makes that safe.
 
+### Windows build
+
+`pnpm --filter @clyro/backend package:win` (`apps/backend/scripts/build-windows.mjs`) produces `apps/backend/release/ClyroLocalSyncServer-Setup-<version>.exe`, a setup file of about 24 MB. It builds three pieces, whose sources live in `apps/backend/packaging/windows/`:
+
+| Piece | What it is |
+|-------|------------|
+| `clyro-sync-server.exe` | The server itself. `src/server.ts` is bundled with esbuild and packed into a copy of `node.exe` using Node's single-executable-application support (`sea-config.json`, postject). It works as one file because SQLite is Node's built-in `node:sqlite`, not a native add-on. The build strips `node.exe`'s original signature first, because injecting the app would otherwise leave a broken one. The exe is configured only through `PORT`, `DB_PATH` and `ALLOWED_ORIGINS`, so it is the same binary a home server or VPS would run. |
+| `ClyroSync.exe` | The tray app (`ClyroSync.cs`), compiled with the C# 5 compiler that ships with Windows' .NET Framework 4, so the build needs no extra toolchain. Its job is described in the next list. |
+| Setup wizard | Inno Setup 6 (`installer.iss`). It installs per user with no admin prompt, adds a Start menu entry and a `HKCU\…\CurrentVersion\Run` value for sign-in start, and stops any running copy before an upgrade or uninstall. Uninstalling asks whether to also delete the vault, and defaults to **No**. |
+
+The tray app:
+
+- runs a single instance;
+- starts the server hidden with `PORT=47821` and `DB_PATH=%LOCALAPPDATA%\Clyro\clyro.db`;
+- writes its output to `%LOCALAPPDATA%\Clyro\logs\server.log`;
+- restarts the server if it exits, and gives up with a notification after 3 failures within a minute, which usually means the port is taken;
+- offers Open data folder, Open log, a Start with Windows toggle (the same Run value) and Quit.
+
+It shows "Running" once the server prints its `Server listening at` line.
+
+- **Where things live:** program files go in `%LOCALAPPDATA%\Programs\Clyro Local Sync Server\`, and data in `%LOCALAPPDATA%\Clyro\`. They are kept apart so reinstalling or upgrading never touches the vault.
+- **Port 47821** is the default for both the installed app and `npm run dev`, and the extension's Local setup screen suggests it. It was chosen over 8080, which other software commonly occupies. It sits below Windows' dynamic port range, which starts at 49152. Only one of the installed app and the dev server can hold it at a time.
+- **Not code-signed yet,** so Windows SmartScreen warns on first run ("More info → Run anyway"). Signing needs a paid certificate.
+
 ---
 
 # Security & Encryption Architecture
@@ -792,10 +816,12 @@ Clyro/
 |   |       `-- storage/      # local encrypted cache
 |   |
 |   |-- backend/              # Local Sync Server (Fastify + SQLite, no Prisma)
-|   |   `-- src/
-|   |       |-- routes/       # vault.ts, pairing.ts
-|   |       |-- services/     # vaultValidation.ts
-|   |       `-- db/           # SQLite setup
+|   |   |-- src/
+|   |   |   |-- routes/       # vault.ts, pairing.ts
+|   |   |   |-- services/     # vaultValidation.ts
+|   |   |   `-- db/           # SQLite setup
+|   |   |-- packaging/windows/  # tray app, installer script, icon, SEA config
+|   |   `-- scripts/          # build-windows.mjs (package:win)
 |   |
 |   `-- website/              # Next.js marketing site + launcher
 |       `-- src/
@@ -839,6 +865,7 @@ Contains code shared between multiple apps: crypto primitives, shared types, and
 | Local Sync Server Runtime | Node.js |
 | Local Sync Server Framework | Fastify |
 | Local Sync Server Storage | SQLite (bundled, no ORM) |
+| Local Sync Server Packaging (Windows) | Node single executable app + C# tray app + Inno Setup installer |
 | Cloud Storage Providers | Google Drive (`chrome.identity`), Dropbox |
 | Local Sync Server Auth | Pairing token + Origin allowlist |
 | Key Derivation | Argon2id |
