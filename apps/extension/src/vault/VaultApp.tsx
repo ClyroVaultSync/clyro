@@ -16,9 +16,8 @@ interface Props {
 }
 
 /**
- * The whole storage-picker/create/unlock/list state machine, per
- * docs/EXTENSION_HANDOFF.md §8 step 4 — mounted both in the popup and in the
- * full-page vault.html tab that OPEN_VAULT opens. Same component, same
+ * The whole storage-picker/create/unlock/list state machine — mounted both in
+ * the popup and in the full-page vault.html tab that OPEN_VAULT opens. Same component, same
  * messages, diverging only at the tail end based on `context`.
  */
 export default function VaultApp({ context = "tab" }: Props) {

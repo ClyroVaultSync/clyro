@@ -5,7 +5,7 @@
  * key, or decrypted blob. The message union in `@clyro/shared-types` has no
  * field capable of carrying one; do not add one here.
  *
- * The extension is built separately (docs/EXTENSION_HANDOFF.md) and may not
+ * The extension is installed separately and may not
  * exist on a given machine at all, so every failure mode — no Chromium, no
  * extension, extension present but no handler, malformed reply, hang — collapses
  * to the same honest answer: `{ installed: false }`. Callers never see an error

@@ -19,7 +19,6 @@ Unlike the Product Requirements Document (PRD), which defines **what** Clyro sho
 This document is intended for:
 
 - Software engineers
-- AI coding assistants
 - Future maintainers
 - Security reviewers
 - Contributors
@@ -305,7 +304,7 @@ Responsibilities include:
 - Secure random generation
 - Key management in memory
 
-The Crypto Engine is the only module responsible for handling encryption keys, and is implemented in `packages/crypto`, shared across the monorepo. See [[Vault Crypto]] in the knowledge base.
+The Crypto Engine is the only module responsible for handling encryption keys, and is implemented in `packages/crypto`, shared across the monorepo.
 
 ## Sync Provider
 
@@ -332,7 +331,7 @@ Talks to the Local Sync Server over `http://localhost:PORT`, authenticated with 
 
 ### GoogleDriveProvider
 
-OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. `updateVault()` therefore re-reads the stored version immediately before writing and returns `CONFLICT` on a mismatch, leaving the retry to `vaultManager.ts`. A small read-then-write race remains that Drive cannot close. See [[Local-First Architecture]] in the knowledge base for the reasoning, and re-verify Drive's current API surface at implementation time.
+OAuth via `chrome.identity`; the vault is a single file in the user's Drive `appDataFolder`. Drive has no native version column or compare-and-swap precondition, so `vaultVersion` travels inside the JSON payload written to the file. `updateVault()` therefore re-reads the stored version immediately before writing and returns `CONFLICT` on a mismatch, leaving the retry to `vaultManager.ts`. A small read-then-write race remains that Drive cannot close.
 
 Drive previously wrote a timestamped **conflict copy** file on a mismatch. That was removed once retry existed: the copy landed in the app-only `appDataFolder`, which the user cannot browse and the extension has no UI to restore from, so it was not a recovery path in practice — only an undiscoverable file accumulating on every conflict.
 
@@ -798,7 +797,6 @@ The repository is organized to keep responsibilities clearly separated.
 ```
 Clyro/
 |-- docs/
-|   |-- AI_INSTRUCTIONS.md
 |   |-- PRD.md
 |   |-- ARCHITECTURE.md
 |   |-- DATABASE.md

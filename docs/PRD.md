@@ -989,7 +989,7 @@ Every implementation decision should align with the principles established in th
 
 As the project evolves, this document should continue to serve as the primary product reference. Significant changes to product behavior, user experience, or feature scope should be reflected here before implementation begins.
 
-By following a documentation-first approach, Clyro aims to maintain a codebase that is consistent, understandable, secure, and scalable for both human contributors and AI-assisted development.
+By following a documentation-first approach, Clyro aims to maintain a codebase that is consistent, understandable, secure, and scalable.
 
 ---
 

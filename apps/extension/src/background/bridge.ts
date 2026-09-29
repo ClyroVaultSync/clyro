@@ -3,7 +3,8 @@ import { getActiveProviderId } from '../providers';
 import type { BridgeMessage, GetStatusResponse, OpenVaultResponse } from '@clyro/shared-types';
 
 /**
- * The website ↔ extension bridge, frozen per docs/EXTENSION_HANDOFF.md §5.
+ * The website ↔ extension bridge (docs/API.md → "Extension ↔ Website Bridge"),
+ * a frozen contract the deployed website depends on.
  * Status only, never secrets — this listener must never gain a case that
  * returns anything beyond GetStatusResponse/OpenVaultResponse.
  */

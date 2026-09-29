@@ -113,7 +113,7 @@ export async function isVaultUnlocked(): Promise<boolean> {
 /**
  * Whether a vault has ever been created on the active provider — distinguishes
  * "needs to create one" from "needs to unlock an existing one". SyncProvider
- * has no lightweight metadata call (§6 of docs/EXTENSION_HANDOFF.md), so this
+ * has no lightweight metadata call, so this
  * fetches the full vault just to check existence; acceptable given vault size.
  * Falls back to the offline cache if the provider is unreachable.
  */

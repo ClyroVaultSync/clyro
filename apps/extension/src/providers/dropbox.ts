@@ -231,7 +231,7 @@ async function uploadFile(path: string, mode: 'add' | { tag: 'update'; rev: stri
  * `vaultVersion` as well, because `rev` alone cannot tell whether the caller's
  * version was computed against the revision being replaced. Either rejection
  * surfaces as CONFLICT, which vaultManager's applyVaultChange() re-applies and
- * retries. See knowledge/Features/Local-First Architecture.md.
+ * retries.
  */
 export class DropboxProvider implements SyncProvider {
   id = 'dropbox' as const;

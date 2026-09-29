@@ -20,7 +20,6 @@ This document should be read together with:
 - ARCHITECTURE.md
 - DATABASE.md
 - API.md
-- AI_INSTRUCTIONS.md
 
 ---
 
