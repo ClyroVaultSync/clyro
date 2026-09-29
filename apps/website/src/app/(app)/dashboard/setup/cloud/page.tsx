@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import SpotlightCard from '../../../../../components/SpotlightCard';
+import ExtensionInstallSteps from '../../../../../components/ExtensionInstallSteps';
 import { PageHeader } from '../../../../../components/ui/PageHeader';
 import { Button } from '../../../../../components/ui/Button';
 import { Badge } from '../../../../../components/ui/Badge';
@@ -86,14 +87,15 @@ export default function CloudSetupPage() {
       />
 
       {!status.installed && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-border bg-raised px-4 py-3">
+        <div className="mb-6 flex flex-col gap-3 rounded-md border border-border bg-raised px-4 py-3">
           <p className="text-sm text-body">
             The Clyro extension isn’t installed yet — cloud storage is connected from inside it.
           </p>
-          <a href={siteConfig.chromeWebStoreUrl} target="_blank" rel="noopener noreferrer">
+          <ExtensionInstallSteps />
+          <a href={siteConfig.extensionDownloadUrl} className="w-fit">
             <Button variant="secondary" size="sm">
               <Icons.Download className="mr-2 h-4 w-4" />
-              Install for Chrome
+              Download for Chrome
             </Button>
           </a>
         </div>

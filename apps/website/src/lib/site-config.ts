@@ -21,13 +21,18 @@ const GITHUB_REPO = process.env.NEXT_PUBLIC_CLYRO_GITHUB_URL || 'https://github.
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://clyrovault.pages.dev';
 
+/** Files attached to the current GitHub Release. The tag fixes their URLs, so the
+ * fallbacks below are committed and a deployment needs no env var for them. */
+const RELEASE_DOWNLOADS = `${GITHUB_REPO}/releases/download/v1.0.0`;
+
 /**
- * PLACEHOLDERS — not real destinations yet:
+ * Downloads come from the GitHub Release: `localServerDownloadUrl` is the Local
+ * Sync Server's Windows installer, and `extensionDownloadUrl` is the extension as
+ * a zip for chrome://extensions → Load unpacked (see extension-install.ts).
+ *
+ * PLACEHOLDER — not a real destination yet:
  *   - `chromeWebStoreUrl`: no extension listing is published. Points at the Web
- *     Store homepage so the button isn't dead, not at a real Clyro listing.
- *   - `localServerDownloadUrl`: the Local Sync Server (Phase 5) doesn't exist.
- *     Empty string means "no download yet" and callers render a disabled control
- *     rather than a link to nowhere.
+ *     Store homepage, and is kept for when a real Clyro listing exists.
  *
  * `siteUrl` is real: the site is deployed on Cloudflare Pages at
  * clyrovault.pages.dev. It must stay listed in `externally_connectable` in
@@ -42,7 +47,11 @@ export const siteConfig = {
   extensionId: EXTENSION_ID,
   chromeWebStoreUrl:
     process.env.NEXT_PUBLIC_CHROME_WEBSTORE_URL || 'https://chromewebstore.google.com/',
-  localServerDownloadUrl: process.env.NEXT_PUBLIC_LOCAL_SERVER_DOWNLOAD_URL || '',
+  localServerDownloadUrl:
+    process.env.NEXT_PUBLIC_LOCAL_SERVER_DOWNLOAD_URL ||
+    `${RELEASE_DOWNLOADS}/ClyroLocalSyncServer-Setup-1.0.0.exe`,
+  extensionDownloadUrl:
+    process.env.NEXT_PUBLIC_EXTENSION_DOWNLOAD_URL || `${RELEASE_DOWNLOADS}/Clyro-Extension-1.0.0.zip`,
 
   githubUrl: GITHUB_REPO,
   contributingUrl: `${GITHUB_REPO}/blob/main/docs/CONTRIBUTING.md`,

@@ -13,6 +13,7 @@ import { Tabs } from '../../../components/ui/Tabs';
 import { Icons } from '../../../components/icons';
 import { useExtensionStatus } from '../../../hooks/useExtensionStatus';
 import { openVault } from '../../../lib/extension-bridge';
+import { EXTENSION_INSTALL_STEPS } from '../../../lib/extension-install';
 import { siteConfig } from '../../../lib/site-config';
 import type { ExtensionStatus, SyncProviderId } from '@clyro/shared-types';
 
@@ -79,15 +80,11 @@ export default function DashboardPage() {
         {
           label: 'Extension',
           title: 'Not installed',
-          description:
-            'Install the Clyro extension for Chrome to create or unlock your vault. This website never renders vault contents — the extension is where your vault actually lives.',
+          description: EXTENSION_INSTALL_STEPS.join(' '),
           icon: <Icons.Download className="h-5 w-5" />,
           action: (
-            <InteractiveHoverButton
-              className="px-4 py-1.5 text-sm"
-              onClick={() => window.open(siteConfig.chromeWebStoreUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Install for Chrome
+            <InteractiveHoverButton className="px-4 py-1.5 text-sm" href={siteConfig.extensionDownloadUrl}>
+              Download for Chrome
             </InteractiveHoverButton>
           ),
           className: 'sm:col-span-2 lg:col-span-2 lg:col-start-2'
@@ -192,6 +189,7 @@ export default function DashboardPage() {
         <MagicBento
           cards={cards}
           glowColor={ACCENT}
+          textAutoHide={false}
           enableTilt={false}
           enableMagnetism={false}
           enableStars={false}

@@ -23,7 +23,7 @@ export function InteractiveHoverButton({
       disabled={!href ? isLoading : undefined}
       aria-disabled={isLoading || undefined}
       className={cn(
-        "group relative w-auto cursor-pointer overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-raised)] p-2 px-6 text-center font-semibold text-heading",
+        "group relative inline-block w-auto cursor-pointer overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-raised)] p-2 px-6 text-center font-semibold text-heading",
         isLoading && "pointer-events-none opacity-70",
         className
       )}

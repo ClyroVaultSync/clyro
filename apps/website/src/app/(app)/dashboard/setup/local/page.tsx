@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Stepper, { Step } from '../../../../../components/Stepper';
+import ExtensionInstallSteps from '../../../../../components/ExtensionInstallSteps';
 import { PageHeader } from '../../../../../components/ui/PageHeader';
 import { Button } from '../../../../../components/ui/Button';
 import { Alert } from '../../../../../components/ui/Alert';
@@ -14,7 +15,6 @@ export default function LocalSetupPage() {
   const { status, loading, refresh } = useExtensionStatus();
 
   const isPaired = status.installed && status.provider === 'local';
-  const downloadUrl = siteConfig.localServerDownloadUrl;
 
   // Three distinct situations, and the instruction differs in each: the visitor
   // has no extension at all, has one but hasn't picked a provider, or is done.
@@ -24,7 +24,7 @@ export default function LocalSetupPage() {
     : isPaired
       ? 'The extension is paired with your Local Sync Server.'
       : status.installed
-        ? 'Open the Clyro extension and choose "Pair with Local Sync Server".'
+        ? 'Open the Clyro extension, choose "Local Sync Server", then Connect.'
         : 'The Clyro extension isn’t installed yet — install it first, then come back to this step.';
 
   return (
@@ -53,17 +53,11 @@ export default function LocalSetupPage() {
               database on this machine. It never sees your master password or decrypted credentials.
             </p>
             <div className="flex flex-wrap gap-3">
-              {downloadUrl ? (
-                <a href={downloadUrl} rel="noopener noreferrer">
-                  <Button variant="primary" size="sm">
-                    Download for Windows
-                  </Button>
-                </a>
-              ) : (
-                <Button variant="primary" size="sm" disabled>
-                  Windows (coming soon)
+              <a href={siteConfig.localServerDownloadUrl}>
+                <Button variant="primary" size="sm">
+                  Download for Windows
                 </Button>
-              )}
+              </a>
               <Button variant="secondary" size="sm" disabled>
                 macOS (coming soon)
               </Button>
@@ -71,20 +65,6 @@ export default function LocalSetupPage() {
                 Linux (coming soon)
               </Button>
             </div>
-            {!downloadUrl && (
-              <p className="text-xs text-body/70">
-                The Local Sync Server isn’t released yet. Cloud storage is available today, or watch the{' '}
-                <a
-                  href={siteConfig.githubUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-heading underline underline-offset-2"
-                >
-                  GitHub repository
-                </a>{' '}
-                for the release.
-              </p>
-            )}
           </div>
         </Step>
 
@@ -101,9 +81,10 @@ export default function LocalSetupPage() {
               — nothing outside your network can reach it.
             </p>
             <p className="text-sm text-body">
-              The installer isn’t code-signed yet, so Windows may show “Windows protected
-              your PC”. Choose <span className="text-heading">More info → Run anyway</span> to
-              continue.
+              The installer isn’t code-signed yet. Chrome may say the file “isn’t commonly
+              downloaded” — choose <span className="text-heading">Keep</span>. Windows may then show
+              “Windows protected your PC” — choose{' '}
+              <span className="text-heading">More info → Run anyway</span>.
             </p>
             <p className="text-sm text-body">
               Running the same binary on a home server or VPS instead of pure <code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">localhost</code> is
@@ -141,12 +122,15 @@ export default function LocalSetupPage() {
                   Check again
                 </Button>
               ) : (
-                <a href={siteConfig.chromeWebStoreUrl} target="_blank" rel="noopener noreferrer" className="w-fit">
-                  <Button variant="secondary" size="sm">
-                    <Icons.Download className="mr-2 h-4 w-4" />
-                    Install the extension
-                  </Button>
-                </a>
+                <>
+                  <ExtensionInstallSteps />
+                  <a href={siteConfig.extensionDownloadUrl} className="w-fit">
+                    <Button variant="secondary" size="sm">
+                      <Icons.Download className="mr-2 h-4 w-4" />
+                      Download for Chrome
+                    </Button>
+                  </a>
+                </>
               )}
             </div>
           </div>
@@ -159,15 +143,16 @@ export default function LocalSetupPage() {
               <h3 className="text-lg font-semibold">Back up your vault</h3>
             </div>
             <p className="text-sm text-body">
-              There is no Clyro-run account to recover from. Your encrypted vault lives entirely in one
-              file, <code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">clyro.db</code>, wherever
-              the Local Sync Server stores it.
+              There is no Clyro-run account to recover from. Your encrypted vault lives in{' '}
+              <code className="rounded-sm bg-raised px-1.5 py-0.5 font-mono text-xs text-heading">%LOCALAPPDATA%\Clyro\clyro.db</code>{' '}
+              — the Clyro tray icon’s <span className="text-heading">Open data folder</span> takes you
+              straight there.
             </p>
             <Alert
               isVisible
               variant="warning"
               title="A lost clyro.db is a lost vault"
-              description="Back up this file the same way you'd back up any other irreplaceable data — copy it somewhere safe on a schedule. You can also export an encrypted vault backup from the extension at any time, which is also the only way to move to Cloud storage later."
+              description="The simplest backup is an encrypted export from the extension: one file you can keep anywhere, and the only way to move to Cloud storage later. To copy the database itself, first choose Quit from the tray icon, then copy the whole Clyro folder, including any clyro.db-wal file, which can hold your latest changes."
             />
           </div>
         </Step>
