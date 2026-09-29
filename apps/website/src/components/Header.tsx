@@ -14,7 +14,10 @@ const NAV_ITEMS = [
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeIndex = NAV_ITEMS.findIndex(item => item.href === pathname);
+  // A section's subpages (e.g. /dashboard/setup/local) highlight that section.
+  const activeIndex = NAV_ITEMS.findIndex(item =>
+    item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`)
+  );
 
   return (
     <header className="relative z-50 grid grid-cols-[1fr_auto_1fr] items-center px-6 py-4">
