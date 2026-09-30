@@ -668,7 +668,7 @@ Regression testing should ensure new features do not weaken existing security gu
 
 If a security vulnerability is discovered:
 
-1. Privately report the issue.
+1. Privately report the issue through the repository's [security advisory form](https://github.com/ClyroVaultSync/clyro/security/advisories/new), not a public issue.
 2. Reproduce the vulnerability.
 3. Assess impact.
 4. Develop a fix.

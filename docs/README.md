@@ -9,6 +9,6 @@ The specs behind Clyro. Start with the PRD for *what* it does, then the architec
 | [SECURITY.md](SECURITY.md) | The zero-knowledge model and the trust boundary: secrets exist only inside the extension |
 | [API.md](API.md) | The Local Sync Server's pairing and vault API, and the extension ↔ website bridge |
 | [DATABASE.md](DATABASE.md) | The Local Sync Server's SQLite schema, and what it never stores |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to report bugs and security issues, set up the repo, and send a pull request |
 
 Back to the [project README](../README.md).

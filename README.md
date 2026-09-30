@@ -39,7 +39,7 @@ No account to create. Nothing anyone else can read, us included.
 
 ## Contents
 
-[At a glance](#-at-a-glance) · [What Clyro does](#-what-clyro-does) · [Get started](#-get-started-in-3-steps) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Security model](#-security-model) · [Storage providers](#-storage-providers) · [Engineering](#-engineering) · [Run it](#-run-it-developers) · [Roadmap](#-roadmap) · [Credits](#-credits)
+[At a glance](#-at-a-glance) · [What Clyro does](#-what-clyro-does) · [Get started](#-get-started-in-3-steps) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Security model](#-security-model) · [Storage providers](#-storage-providers) · [Engineering](#-engineering) · [Run it](#-run-it-developers) · [Roadmap](#-roadmap) · [Contributing](#-contributing) · [Credits](#-credits)
 
 ## ◉ At a glance
 
@@ -231,6 +231,14 @@ The specs start at [docs/README.md](docs/README.md).
 - **Code signing**: no more SmartScreen or download warnings.
 - **Google Drive and Dropbox for everyone**: out of testing, open to all.
 - **macOS and Linux**: the Local Sync Server beyond Windows.
+
+## 🤝 Contributing
+
+Contributions are welcome, from a one-line bug report to a pull request.
+
+- **Found a bug or have an idea?** [Open an issue](https://github.com/ClyroVaultSync/clyro/issues).
+- **Found a security problem?** Please don't post it publicly. [Report it privately](https://github.com/ClyroVaultSync/clyro/security/advisories/new) instead.
+- **Want to write code?** Read [CONTRIBUTING.md](docs/CONTRIBUTING.md) first. It covers setup, the zero-knowledge rules every change must keep, and what a good pull request includes.
 
 ## 👤 Credits
 
