@@ -1,23 +1,12 @@
+/* Sized by its content rather than centred in a fixed aspect-ratio box: each
+   step is taller than the last, and a centred card that outgrows a fixed-height
+   box spills out of both ends, up over the page heading. This way the card only
+   grows downward. */
 .outer-container {
   display: flex;
-  min-height: 100%;
-  flex: 1 1 0%;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 1rem;
-}
-
-@media (min-width: 640px) {
-  .outer-container {
-    aspect-ratio: 4 / 3;
-  }
-}
-
-@media (min-width: 768px) {
-  .outer-container {
-    aspect-ratio: 2 / 1;
-  }
 }
 
 .step-circle-container {
