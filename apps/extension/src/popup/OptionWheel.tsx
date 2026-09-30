@@ -288,7 +288,6 @@ const OptionWheel = ({
 
   useEffect(() => {
     applyTarget(targetRef.current, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, fontSize, spacing, curve, tilt, blur, fade, minOpacity, side, loop, smoothing, applyTarget]);
 
   useEffect(
