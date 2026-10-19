@@ -22,8 +22,9 @@ const GITHUB_REPO = process.env.NEXT_PUBLIC_CLYRO_GITHUB_URL || 'https://github.
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://clyrovault.pages.dev';
 
 /** Files attached to the current GitHub Release. The tag fixes their URLs, so the
- * fallbacks below are committed and a deployment needs no env var for them. */
-const RELEASE_DOWNLOADS = `${GITHUB_REPO}/releases/download/v1.0.0`;
+ * fallbacks below are committed and a deployment needs no env var for them. The
+ * installer didn't change in v1.0.1, so it keeps its 1.0.0 file name. */
+const RELEASE_DOWNLOADS = `${GITHUB_REPO}/releases/download/v1.0.1`;
 
 /**
  * Downloads come from the GitHub Release: `localServerDownloadUrl` is the Local
@@ -51,7 +52,7 @@ export const siteConfig = {
     process.env.NEXT_PUBLIC_LOCAL_SERVER_DOWNLOAD_URL ||
     `${RELEASE_DOWNLOADS}/ClyroLocalSyncServer-Setup-1.0.0.exe`,
   extensionDownloadUrl:
-    process.env.NEXT_PUBLIC_EXTENSION_DOWNLOAD_URL || `${RELEASE_DOWNLOADS}/Clyro-Extension-1.0.0.zip`,
+    process.env.NEXT_PUBLIC_EXTENSION_DOWNLOAD_URL || `${RELEASE_DOWNLOADS}/Clyro-Extension-1.0.1.zip`,
 
   githubUrl: GITHUB_REPO,
   contributingUrl: `${GITHUB_REPO}/blob/main/docs/CONTRIBUTING.md`,

@@ -6,7 +6,7 @@ export const termsDocument: LegalDocument = {
   title: 'Terms of Use',
   subtitle:
     'Clyro is free, open-source software you run yourself. There is no service to sign up for, and no service to be cut off from.',
-  lastUpdated: '2026-08-18',
+  lastUpdated: '2026-10-19',
   sections: [
     {
       id: 'what-you-agree-to',
@@ -95,7 +95,7 @@ export const termsDocument: LegalDocument = {
         },
         {
           kind: 'p',
-          text: 'The browser extension is distributed through the Chrome Web Store, whose own terms apply to the distribution.'
+          text: 'The browser extension is distributed as a download from Clyro’s GitHub releases, and GitHub’s own terms apply to that distribution.'
         }
       ]
     },
