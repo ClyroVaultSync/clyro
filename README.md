@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://clyrovault.pages.dev"><img alt="Live site" src="https://img.shields.io/badge/live%20site-clyrovault.pages.dev-8b5cf6?style=flat" /></a>
-  <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.0.1"><img alt="Download v1.0.1" src="https://img.shields.io/badge/download-v1.0.1-f5f3f1?style=flat" /></a>
+  <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.1.0"><img alt="Download v1.1.0" src="https://img.shields.io/badge/download-v1.1.0-f5f3f1?style=flat" /></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-a39c97?style=flat" /></a>
   <img alt="Chrome Manifest V3" src="https://img.shields.io/badge/chrome-Manifest%20V3-4285f4?style=flat&logo=googlechrome&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/typescript-5-3178c6?style=flat&logo=typescript&logoColor=white" />
@@ -15,14 +15,14 @@
 
 <p align="center">
   <a href="https://clyrovault.pages.dev"><b>Website</b></a> ·
-  <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.0.1"><b>Download</b></a> ·
+  <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.1.0"><b>Download</b></a> ·
   <a href="#-get-started-in-3-steps">Get started</a> ·
   <a href="#-how-it-works">How it works</a> ·
   <a href="#-security-model">Security</a> ·
   <a href="#-run-it-developers">Run it</a>
 </p>
 
-<p align="center"><sub>🌐 Live at <a href="https://clyrovault.pages.dev"><b>clyrovault.pages.dev</b></a> · ⬇ <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.0.1"><b>v1.0.1</b></a>: the Chrome extension and the Windows Local Sync Server.</sub></p>
+<p align="center"><sub>🌐 Live at <a href="https://clyrovault.pages.dev"><b>clyrovault.pages.dev</b></a> · ⬇ <a href="https://github.com/ClyroVaultSync/clyro/releases/tag/v1.1.0"><b>v1.1.0</b></a>: the Chrome extension and the Windows Local Sync Server.</sub></p>
 
 ---
 
@@ -51,7 +51,7 @@ No account to create. Nothing anyone else can read, us included.
 | **Offline** | Saves land on your device first, encrypted, and sync when your storage answers again |
 | **Import** | Bring your logins from Dashlane, Chrome, Firefox, Safari, Bitwarden, LastPass, 1Password, Proton Pass, KeePassXC or RoboForm (their CSV export) |
 | **Platforms** | Chrome (Manifest V3) · Local Sync Server for Windows · macOS and Linux server on the way |
-| **Status** | **v1.0.1**. Free and open source (MIT) |
+| **Status** | **v1.1.0**. Free and open source (MIT) |
 
 ## ✦ What Clyro does
 
@@ -73,8 +73,8 @@ Coming from another password manager? Import its CSV export from the vault page.
 
 ## ▶ Get started in 3 steps
 
-1. **Add the extension.** Download [`Clyro-Extension-1.0.1.zip`](https://github.com/ClyroVaultSync/clyro/releases/download/v1.0.1/Clyro-Extension-1.0.1.zip) and unzip it. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose the unzipped folder.
-2. **Install the Local Sync Server** (Windows). Run [`ClyroLocalSyncServer-Setup-1.0.0.exe`](https://github.com/ClyroVaultSync/clyro/releases/download/v1.0.1/ClyroLocalSyncServer-Setup-1.0.0.exe). It starts right away and at every sign-in; look for the Clyro icon near the clock.
+1. **Add the extension.** Download [`Clyro-Extension-1.1.0.zip`](https://github.com/ClyroVaultSync/clyro/releases/download/v1.1.0/Clyro-Extension-1.1.0.zip) and unzip it. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose the unzipped folder.
+2. **Install the Local Sync Server** (Windows). Run [`ClyroLocalSyncServer-Setup-1.0.0.exe`](https://github.com/ClyroVaultSync/clyro/releases/download/v1.1.0/ClyroLocalSyncServer-Setup-1.0.0.exe). It starts right away and at every sign-in; look for the Clyro icon near the clock.
 3. **Create your vault.** Open the extension, choose **Local Sync Server**, click **Connect**, and set a master password. There's no reset, so keep it somewhere safe.
 
 > [!TIP]

@@ -6,12 +6,13 @@ import type { LegalDocument } from './types';
  *   - the single sessionStorage key in components/IntroGate.tsx
  *   - the bridge message union in packages/shared-types (status only, no secrets)
  *   - the absence of any analytics/telemetry script in app/layout.tsx
+ *   - the extension's CSV import (apps/extension/src/vault), which reads the file in the page and uploads nothing
  */
 export const privacyDocument: LegalDocument = {
   title: 'Privacy Policy',
   subtitle:
     'Clyro has no accounts, no servers and no analytics, so this page is mostly a list of things that do not happen.',
-  lastUpdated: '2026-08-18',
+  lastUpdated: '2026-10-19',
   sections: [
     {
       id: 'summary',
@@ -106,6 +107,16 @@ export const privacyDocument: LegalDocument = {
         {
           kind: 'p',
           text: 'To offer autofill, the extension needs to detect login forms on pages you visit. That detection happens locally, in your browser, and produces no record that is sent anywhere. Clyro does not build a history of the sites you visit and has nowhere to send one.'
+        }
+      ]
+    },
+    {
+      id: 'importing',
+      title: 'Importing from another password manager',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'If you import passwords from another password manager, the file you choose is read inside the extension, on your device. It is never uploaded anywhere, and the logins in it are encrypted into your vault like any other.'
         }
       ]
     },
