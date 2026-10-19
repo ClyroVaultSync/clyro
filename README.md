@@ -49,6 +49,7 @@ No account to create. Nothing anyone else can read, us included.
 | **Storage** | Your pick: the **Local Sync Server** on your PC, your **Google Drive**, or your **Dropbox** |
 | **Account** | **None.** No sign-up, no email, no Clyro server holding anything of yours |
 | **Offline** | Saves land on your device first, encrypted, and sync when your storage answers again |
+| **Import** | Bring your logins from Dashlane, Chrome, Firefox, Safari, Bitwarden, LastPass, 1Password, Proton Pass, KeePassXC or RoboForm (their CSV export) |
 | **Platforms** | Chrome (Manifest V3) · Local Sync Server for Windows · macOS and Linux server on the way |
 | **Status** | **v1.0.1**. Free and open source (MIT) |
 
@@ -67,6 +68,8 @@ Pick one storage provider at setup: a small server on your own PC, your Google D
 ### 3. Fill and save as you browse
 
 The extension fills logins, offers to save new or changed passwords, and keeps your whole vault one click away in a full-page view. The website is only a launcher: it never sees what's inside.
+
+Coming from another password manager? Import its CSV export from the vault page. The file is read on your device and never uploaded.
 
 ## ▶ Get started in 3 steps
 
@@ -177,7 +180,7 @@ flowchart LR
 
 ## 🛠 Engineering
 
-- **168 tests** on `pnpm -r test`: 139 for the extension, 22 for the Local Sync Server, 7 for the crypto package.
+- **202 tests** on `pnpm -r test`: 173 for the extension, 22 for the Local Sync Server, 7 for the crypto package.
 - **A bridge that can't leak.** The website talks to the extension through `chrome.runtime` messages whose types (`packages/shared-types`) have no field that could carry a password, key or vault. Status only, enforced by the compiler.
 - **Saves carry the change, not the list**, so a save can be safely re-applied on top of whatever another device just wrote.
 - **A pnpm monorepo** of three apps and two shared packages, all TypeScript.

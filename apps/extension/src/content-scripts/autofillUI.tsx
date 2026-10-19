@@ -7,18 +7,21 @@ interface CredentialsFoundDetail {
   field: HTMLInputElement;
 }
 
+// Clyro's locked design tokens (see vault/VaultList.css), hardcoded because a
+// content script's shadow root can't share the extension pages' stylesheets:
+// raised #1a1210, accent #8b5cf6, heading #f5f3f1, body #a39c97. Flat, no gradients.
 const UI_CSS = `
   .clyro-overlay {
     position: fixed;
     z-index: 2147483647;
-    font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif;
-    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #f5f3f1;
     pointer-events: auto;
   }
 
   .clyro-dropdown {
-    background: #1e293b;
-    border: 1px solid #3b82f6;
+    background: #1a1210;
+    border: 1px solid #8b5cf6;
     border-radius: 8px;
     box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
     min-width: 220px;
@@ -29,7 +32,7 @@ const UI_CSS = `
   .clyro-dropdown-item {
     padding: 12px 16px;
     cursor: pointer;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     transition: background-color 0.15s ease;
   }
 
@@ -38,7 +41,12 @@ const UI_CSS = `
   }
 
   .clyro-dropdown-item:hover {
-    background-color: #334155;
+    background-color: rgba(139, 92, 246, 0.12);
+  }
+
+  .clyro-dropdown-hint {
+    padding: 12px 16px;
+    cursor: default;
   }
 
   .clyro-item-name {
@@ -49,12 +57,12 @@ const UI_CSS = `
 
   .clyro-item-username {
     font-size: 12px;
-    color: #94a3b8;
+    color: #a39c97;
   }
 
   .clyro-banner {
-    background: linear-gradient(135deg, #1e293b, #0f172a);
-    border: 1px solid #60a5fa;
+    background: #1a1210;
+    border: 1px solid #8b5cf6;
     border-radius: 12px;
     box-shadow: 0 10px 30px -5px rgba(0,0,0,0.6);
     padding: 16px;
@@ -66,16 +74,18 @@ const UI_CSS = `
     font-size: 15px;
     font-weight: 600;
     margin-bottom: 8px;
-    background: linear-gradient(90deg, #60a5fa, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #f5f3f1;
   }
 
   .clyro-banner-text {
     font-size: 13px;
-    color: #cbd5e1;
+    color: #a39c97;
     margin-bottom: 16px;
     line-height: 1.4;
+  }
+
+  .clyro-banner-text strong {
+    color: #f5f3f1;
   }
 
   .clyro-banner-error {
@@ -103,24 +113,24 @@ const UI_CSS = `
   }
 
   .clyro-btn-primary {
-    background-color: #3b82f6;
-    color: white;
+    background-color: #8b5cf6;
+    color: #120d0c;
   }
 
   .clyro-btn-primary:hover {
-    background-color: #2563eb;
-    transform: translateY(-1px);
+    background-color: #a78bfa;
   }
 
   .clyro-btn-secondary {
     background-color: transparent;
-    color: #94a3b8;
-    border: 1px solid #475569;
+    color: #a39c97;
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .clyro-btn-secondary:hover {
-    background-color: #334155;
-    color: #f8fafc;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #f5f3f1;
   }
 
   @keyframes fadeIn {
@@ -141,6 +151,8 @@ function AutofillUI() {
     left: number;
   } | null>(null);
   const [activeInput, setActiveInput] = useState<HTMLInputElement | null>(null);
+  /** Shows "Clyro is locked" in place of the logins, which can't be read until the vault is unlocked. */
+  const [locked, setLocked] = useState(false);
 
   const [newCred, setNewCred] = useState<{
     url: string;
@@ -182,7 +194,7 @@ function AutofillUI() {
   }, []);
 
   const updatePositions = () => {
-    if (activeInput && options.length > 0) {
+    if (activeInput && (options.length > 0 || locked)) {
       const rect = activeInput.getBoundingClientRect();
       setDropdownPos({ top: rect.bottom + 4, left: rect.left });
     }
@@ -202,9 +214,20 @@ function AutofillUI() {
     // drifted (user tabbed/clicked away) by the time this listener runs.
     const onFound = (e: Event) => {
       const { items, field } = (e as CustomEvent<CredentialsFoundDetail>).detail;
+      setLocked(false);
       if (!items || items.length === 0) return;
 
       setOptions(items);
+      setActiveInput(field);
+
+      const rect = field.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    };
+
+    const onLocked = (e: Event) => {
+      const { field } = (e as CustomEvent<{ field: HTMLInputElement }>).detail;
+      setOptions([]);
+      setLocked(true);
       setActiveInput(field);
 
       const rect = field.getBoundingClientRect();
@@ -215,25 +238,30 @@ function AutofillUI() {
       // If we click outside the dropdown, close it
       // The event is on document, so if it reaches here and we didn't click inside shadow DOM, close.
       // But shadow DOM events are retargeted to the host.
+      // The field it belongs to doesn't count: focusing it (which opens the dropdown) happens on
+      // mousedown, so a quick answer can arrive before this click does, on mouseup.
       const hostEl = document.getElementById("clyro-autofill-host");
-      if (e.target !== hostEl) {
+      if (e.target !== hostEl && e.target !== activeInput) {
         setOptions([]);
+        setLocked(false);
         setActiveInput(null);
       }
     };
 
     window.addEventListener("clyro:credentials-found", onFound);
+    window.addEventListener("clyro:vault-locked", onLocked);
     window.addEventListener("scroll", updatePositions, true);
     window.addEventListener("resize", updatePositions, true);
     document.addEventListener("click", handleClickOutside);
 
     return () => {
       window.removeEventListener("clyro:credentials-found", onFound);
+      window.removeEventListener("clyro:vault-locked", onLocked);
       window.removeEventListener("scroll", updatePositions, true);
       window.removeEventListener("resize", updatePositions, true);
       document.removeEventListener("click", handleClickOutside);
     };
-  }, [activeInput, options.length, newCred, bannerField]);
+  }, [activeInput, options.length, locked, newCred, bannerField]);
 
   const fillCredential = (item: VaultItem) => {
     if (!activeInput) return;
@@ -312,21 +340,28 @@ function AutofillUI() {
 
   return (
     <>
-      {options.length > 0 && dropdownPos && (
+      {(options.length > 0 || locked) && dropdownPos && (
         <div
           className="clyro-overlay clyro-dropdown"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
-          {options.map((item, idx) => (
-            <div
-              key={item.id || idx}
-              className="clyro-dropdown-item"
-              onClick={() => fillCredential(item)}
-            >
-              <div className="clyro-item-name">{item.name || item.url}</div>
-              <div className="clyro-item-username">{item.username}</div>
+          {locked ? (
+            <div className="clyro-dropdown-hint">
+              <div className="clyro-item-name">Clyro is locked</div>
+              <div className="clyro-item-username">Click the Clyro icon in your toolbar to unlock.</div>
             </div>
-          ))}
+          ) : (
+            options.map((item, idx) => (
+              <div
+                key={item.id || idx}
+                className="clyro-dropdown-item"
+                onClick={() => fillCredential(item)}
+              >
+                <div className="clyro-item-name">{item.name || item.url}</div>
+                <div className="clyro-item-username">{item.username}</div>
+              </div>
+            ))
+          )}
         </div>
       )}
 

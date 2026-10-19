@@ -62,22 +62,7 @@ export default function CredentialForm({ item, saving, onSave, onCancel, onDelet
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        background: "#1a1210",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        borderRadius: "12px",
-        padding: "20px",
-        boxSizing: "border-box",
-      }}
-    >
+    <form onSubmit={handleSubmit} style={panelStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
         <button
           type="button"
@@ -182,7 +167,22 @@ export default function CredentialForm({ item, saving, onSave, onCancel, onDelet
   );
 }
 
-const buttonRowStyle = { display: "flex", gap: "8px" };
+export const buttonRowStyle = { display: "flex", gap: "8px" };
+
+// The card that takes over the vault page for a form, shared with ImportView.
+export const panelStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: "10px",
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto" as const,
+  background: "#1a1210",
+  border: "1px solid rgba(255, 255, 255, 0.1)",
+  borderRadius: "12px",
+  padding: "20px",
+  boxSizing: "border-box" as const,
+};
 
 // Shared with VaultList (search box, Lock button) so the vault page's inputs
 // and compact buttons stay consistent.

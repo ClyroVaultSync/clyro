@@ -260,6 +260,7 @@ This placement is deliberate, not incidental: a website page runs in a context a
 
 - First-run storage picker (Local vs. Cloud)
 - Vault list, search, add/edit/delete credentials
+- Import from other password managers (CSV)
 - Password generator interface
 - Settings — Storage & Sync (connect, reconnect, switch provider)
 - Export / import
@@ -361,6 +362,10 @@ Responsibilities:
 
 The Autofill Engine never stores credentials itself.
 
+Credentials are matched to a page by **website**: the registrable domain of the page's hostname and of each item's URL, from the Public Suffix List. This is the `tldts` library, with private suffixes such as `github.io` treated as boundaries, wrapped in `apps/extension/src/services/domains.ts`. The same function decides duplicates for the save prompt and for imports.
+
+When the vault is locked, `FIND_MATCHING_CREDENTIALS` answers `VAULT_LOCKED` without reading the vault, and the dropdown shows "Clyro is locked" instead of logins. Before a storage provider is chosen there is nothing to unlock, so it stays silent.
+
 ## Auto Login
 
 Responsibilities:
@@ -408,6 +413,14 @@ Responsibilities:
 - Serve as the mechanism for moving a vault between storage providers
 
 Both operations work on the already-encrypted vault blob; the file itself is never plaintext.
+
+### Importing from other password managers
+
+The vault tab imports another password manager's CSV export (`apps/extension/src/vault/csvImport.ts` and `ImportView.tsx`).
+- **Parsing in the page:** parsing and column mapping are pure functions that run in the page. Columns are recognised by name across the managers' formats.
+- **Saving:** the resulting items go through the ordinary `SAVE_VAULT_CHANGE` as one change. So an import is encrypted, conflict-retried and queued offline like any other save, and needs no new message type and no shared-types change.
+- **Only additions:** an import only adds items. Duplicates (same website, username and password) and rows without a password are skipped and counted.
+- **Unlike the `.clyro` import,** this file *is* plaintext, which is why it never leaves the page (see `docs/SECURITY.md`).
 
 ## Bridge Handler
 

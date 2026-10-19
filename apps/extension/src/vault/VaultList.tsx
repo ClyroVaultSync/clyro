@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import type { VaultItem } from "@clyro/shared-types";
 import InteractiveHoverButton from "../popup/InteractiveHoverButton";
 import VaultItemRow, { ROW_GRID_COLUMNS } from "./VaultItemRow";
-import CredentialForm, { inputStyle, compactButtonWidth } from "./CredentialForm";
+import CredentialForm, { inputStyle, compactButtonWidth, buttonRowStyle } from "./CredentialForm";
+import ImportView from "./ImportView";
 import { SearchIcon, ChevronDownIcon } from "./VaultIcons";
 import "./VaultList.css";
 
@@ -10,8 +11,8 @@ interface Props {
   onLock: () => void;
 }
 
-/** Which screen the vault shows: the item list (null), or the credential form. */
-type FormState = null | { mode: "add" } | { mode: "edit"; item: VaultItem };
+/** Which screen the vault shows: the item list (null), the credential form, or the CSV import. */
+type FormState = null | { mode: "add" } | { mode: "edit"; item: VaultItem } | { mode: "import" };
 
 /** Changes saved on this device that haven't reached the storage provider yet (background/syncQueue.ts). */
 interface SyncStatus {
@@ -209,7 +210,14 @@ export default function VaultList({ onLock }: Props) {
         </div>
       )}
 
-      {form ? (
+      {form?.mode === "import" ? (
+        <ImportView
+          existingItems={items}
+          saving={saving}
+          onImport={(imported) => saveChange({ upsert: imported })}
+          onClose={() => setForm(null)}
+        />
+      ) : form ? (
         <CredentialForm
           key={form.mode === "edit" ? form.item.id : "new"}
           item={form.mode === "edit" ? form.item : undefined}
@@ -300,7 +308,9 @@ export default function VaultList({ onLock }: Props) {
                 <div style={{ textAlign: "center", padding: "20px", color: "#a39c97" }}>Loading items...</div>
               ) : filteredItems.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "20px", color: "#a39c97" }}>
-                  {items.length === 0 ? "Vault is empty." : "No results found."}
+                  {items.length === 0
+                    ? "Vault is empty. Add a credential, or import your passwords from another password manager."
+                    : "No results found."}
                 </div>
               ) : (
                 filteredItems.map((item) => (
@@ -315,9 +325,18 @@ export default function VaultList({ onLock }: Props) {
             </div>
           </div>
 
-          <InteractiveHoverButton onClick={() => setForm({ mode: "add" })} disabled={loading}>
-            Add Credential
-          </InteractiveHoverButton>
+          <div style={buttonRowStyle}>
+            <div style={{ flex: 1 }}>
+              <InteractiveHoverButton onClick={() => setForm({ mode: "import" })} disabled={loading}>
+                Import Passwords
+              </InteractiveHoverButton>
+            </div>
+            <div style={{ flex: 1 }}>
+              <InteractiveHoverButton onClick={() => setForm({ mode: "add" })} disabled={loading}>
+                Add Credential
+              </InteractiveHoverButton>
+            </div>
+          </div>
         </>
       )}
     </div>

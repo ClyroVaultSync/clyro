@@ -385,6 +385,10 @@ When the user focuses on either the username/email field or the password field o
 
 Example: on `discord.com`, with stored accounts `personal@example.com`, `work@example.com`, and `testing@example.com`, the user selects one and Clyro automatically fills the username/email and password. No additional interaction should be required.
 
+Credentials belong to a **website**, not to a single hostname: its registrable domain, as defined by the Public Suffix List. A login saved for `steelseries.com` is offered on `accounts.steelseries.com`, and the reverse. Private suffixes count, so `alice.github.io` and `bob.github.io` are different websites, as are `amazon.co.uk` and any other `.co.uk` site. The same rule decides when a detected credential duplicates a saved one (§4).
+
+While the vault is locked, the dropdown says so and points the user to the Clyro toolbar icon, rather than showing nothing.
+
 ## Auto Login
 
 Users may optionally enable Auto Login. When enabled, credentials are automatically filled and the login form is automatically submitted. When disabled, credentials are filled and the user manually submits the form. Auto Login remains optional and disabled by default.
@@ -459,6 +463,18 @@ Requirements:
 - Import decrypts and restores a vault, requiring the correct master password.
 - This is the **only** backup and recovery mechanism, since there is no account to reset.
 - This is the **only** mechanism for moving a vault from one Storage Provider to another.
+
+## Importing from other password managers
+
+Users switching from another password manager can import its CSV export from the vault tab. Supported: Dashlane, Chrome and other Chromium browsers, Firefox, Safari, Bitwarden, LastPass, 1Password, Proton Pass, KeePassXC and RoboForm.
+
+Requirements:
+
+- The file is read and parsed inside the extension's vault tab. It is never uploaded, stored or logged, and its logins reach storage only through the normal encrypted save.
+- Before anything is saved, the user sees what will be imported and what will be skipped: rows without a password, duplicates (same website, username and password as an existing item or an earlier row), and logins without a website address.
+- An import only adds items. It never overwrites or deletes an existing one.
+- Nothing is dropped silently: a second username and any 2FA setup key are kept in the item's notes.
+- After importing, the user is told to delete the exported file, which holds every password in plain text.
 
 ---
 
@@ -613,7 +629,7 @@ Potential improvements include:
 - Accessibility enhancements
 - Faster synchronization
 - Better onboarding for the Local Sync Server install/pairing flow
-- Password import tools (from other managers)
+- Password import tools (from other managers): shipped in 1.1.0 as CSV import, see §10
 - Improved diagnostics
 - Performance optimizations
 
@@ -882,6 +898,8 @@ The Clyro Version 1.0 release shall be considered complete when all of the follo
 
 - Login forms are detected correctly.
 - Credential suggestions appear when focusing a login field.
+- Credentials saved for a website are suggested on its subdomains, and never on an unrelated site.
+- A locked vault says so in the dropdown instead of showing nothing.
 - Selected credentials autofill accurately.
 - Auto Login functions correctly when enabled.
 - Manual login remains the default behavior.
@@ -903,6 +921,7 @@ The Clyro Version 1.0 release shall be considered complete when all of the follo
 
 - Export produces a valid encrypted `.clyro` file.
 - Import correctly restores a vault from that file, including into a different Storage Provider than it was exported from.
+- A CSV export from another password manager imports into the vault, skipping duplicates and rows without a password, and leaving existing items untouched.
 
 ## Website Dashboard
 

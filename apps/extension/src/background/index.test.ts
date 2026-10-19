@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { handleMessage } from './index';
-import { createVault, unlockVault, lockVault, vaultExists, getVaultItems, applyVaultChange, syncPendingChanges } from './vaultManager';
+import {
+  createVault,
+  unlockVault,
+  lockVault,
+  isVaultUnlocked,
+  vaultExists,
+  getVaultItems,
+  applyVaultChange,
+  syncPendingChanges,
+} from './vaultManager';
 import { getSyncStatus, clearPendingChanges } from './syncQueue';
 import {
   getActiveProviderId,
@@ -178,6 +187,7 @@ describe('Background message routing', () => {
   });
 
   it('FIND_MATCHING_CREDENTIALS filters vault items by domain', async () => {
+    (isVaultUnlocked as Mock).mockResolvedValue(true);
     (getVaultItems as Mock).mockResolvedValue({
       success: true,
       data: [
@@ -190,6 +200,38 @@ describe('Background message routing', () => {
 
     expect(response.success).toBe(true);
     expect((response as { success: true; data: unknown[] }).data).toHaveLength(1);
+  });
+
+  it('FIND_MATCHING_CREDENTIALS offers a login saved for a site on its sign-in subdomain', async () => {
+    (isVaultUnlocked as Mock).mockResolvedValue(true);
+    (getVaultItems as Mock).mockResolvedValue({
+      success: true,
+      data: [{ id: '1', name: 'SteelSeries', url: 'steelseries.com', username: 'a', password: 'p', createdAt: '', updatedAt: '' }],
+    });
+
+    const response = await handleMessage({ type: 'FIND_MATCHING_CREDENTIALS', domain: 'accounts.steelseries.com' });
+
+    expect((response as { success: true; data: unknown[] }).data).toHaveLength(1);
+  });
+
+  it('FIND_MATCHING_CREDENTIALS tells the page when the vault is locked', async () => {
+    (isVaultUnlocked as Mock).mockResolvedValue(false);
+    (getActiveProviderId as Mock).mockResolvedValue('google-drive');
+
+    const response = await handleMessage({ type: 'FIND_MATCHING_CREDENTIALS', domain: 'example.com' });
+
+    expect(response).toMatchObject({ success: false, error: { code: 'VAULT_LOCKED' } });
+    expect(getVaultItems).not.toHaveBeenCalled();
+  });
+
+  it('FIND_MATCHING_CREDENTIALS stays silent before a storage provider is set up', async () => {
+    (isVaultUnlocked as Mock).mockResolvedValue(false);
+    (getActiveProviderId as Mock).mockResolvedValue(null);
+    (getVaultItems as Mock).mockResolvedValue({ success: false, error: 'Vault is locked.' });
+
+    const response = await handleMessage({ type: 'FIND_MATCHING_CREDENTIALS', domain: 'example.com' });
+
+    expect(response).toMatchObject({ success: false, error: { code: 'FIND_MATCHING_CREDENTIALS_FAILED' } });
   });
 
   it('SAVE_NEW_CREDENTIAL adds a new item when no duplicate exists', async () => {

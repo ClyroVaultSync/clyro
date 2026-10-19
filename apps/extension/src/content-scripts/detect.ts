@@ -10,6 +10,7 @@ import type { BackgroundMessage, BackgroundResponse } from '../background/messag
  */
 
 const CREDENTIALS_FOUND_EVENT = 'clyro:credentials-found';
+const VAULT_LOCKED_EVENT = 'clyro:vault-locked';
 
 interface LoginFieldPair {
   usernameField: HTMLInputElement | null;
@@ -70,8 +71,11 @@ const attachedFields = new WeakSet<HTMLInputElement>();
  */
 async function handleFieldFocus(field: HTMLInputElement): Promise<void> {
   const response = await sendMessage({ type: 'FIND_MATCHING_CREDENTIALS', domain: window.location.hostname });
-  if (response.success && document.activeElement === field) {
+  if (document.activeElement !== field) return;
+  if (response.success) {
     window.dispatchEvent(new CustomEvent(CREDENTIALS_FOUND_EVENT, { detail: { items: response.data ?? [], field } }));
+  } else if (response.error.code === 'VAULT_LOCKED') {
+    window.dispatchEvent(new CustomEvent(VAULT_LOCKED_EVENT, { detail: { field } }));
   }
 }
 

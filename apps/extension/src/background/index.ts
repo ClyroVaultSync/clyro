@@ -21,6 +21,7 @@ import {
   clearDropboxConfig,
 } from '../providers';
 import { exportVault, importVault } from '../services/exportImport';
+import { domainMatches, extractDomain } from '../services/domains';
 import { copyToClipboard } from './clipboard';
 import { clearVaultKey, setPendingCredential, takePendingCredential } from '../storage/sessionStorage';
 import { clearCachedVaultBlob } from '../storage/localStorage';
@@ -116,6 +117,11 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
         return { success: true, data: { ...status, providerId: await getActiveProviderId() } };
       }
       case 'FIND_MATCHING_CREDENTIALS': {
+        // A distinct code lets the page say "Clyro is locked" instead of showing nothing.
+        // A Clyro that isn't set up yet has nothing to unlock, so it stays silent.
+        if (!(await isVaultUnlocked()) && (await getActiveProviderId())) {
+          return { success: false, error: { code: 'VAULT_LOCKED', message: 'Vault is locked.' } };
+        }
         const result = await getVaultItems();
         if (!result.success || !result.data) {
           return { success: false, error: { code: 'FIND_MATCHING_CREDENTIALS_FAILED', message: result.error || 'Failed to read vault items.' } };
@@ -216,22 +222,4 @@ export async function handleMessage(message: BackgroundMessage): Promise<Backgro
     console.error('Background worker error handling message:', message.type, error);
     return { success: false, error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.' } };
   }
-}
-
-/** Strips a leading "www." so "www.example.com" and "example.com" are treated as the same site. */
-function normalizeHost(host: string): string {
-  return host.toLowerCase().replace(/^www\./, '');
-}
-
-/** VaultItem.url may be a bare hostname or a full URL; extracts a comparable hostname either way. */
-function extractDomain(url: string): string {
-  try {
-    return normalizeHost(new URL(url).hostname);
-  } catch {
-    return normalizeHost(url.split('/')[0]);
-  }
-}
-
-function domainMatches(itemUrl: string, domain: string): boolean {
-  return extractDomain(itemUrl) === normalizeHost(domain);
 }

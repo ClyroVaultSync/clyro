@@ -492,6 +492,12 @@ The encrypted `.clyro` export file:
 
 Import restores a vault from a `.clyro` file by decrypting it locally (requiring the correct master password) exactly as if it had been fetched from a Storage Provider.
 
+**Importing from another password manager is different: its CSV export is the user's whole vault in plain text.**
+- Clyro reads it only inside the vault tab, an extension page and never a web page.
+- It is never uploaded, stored or logged.
+- Its logins reach storage only as encrypted vault items, through the normal save.
+- Clyro can't protect the file while it sits on disk, so after an import the vault tab tells the user to delete it and empty the Recycle Bin.
+
 ---
 
 # Local Storage Security
@@ -566,6 +572,14 @@ Autofill should occur only when:
 - The user has enabled autofill.
 
 Autofill should never expose credentials to unrelated domains.
+
+A **website** is a registrable domain from the Public Suffix List, private suffixes included.
+- A login saved for `example.com` is offered on `accounts.example.com`.
+- It is never offered on `example.co.uk`, on `example.com.evil.net`, or on another tenant of a shared host such as `github.io`.
+- An item with no website address is offered nowhere.
+- While the vault is locked, the dropdown shows only that Clyro is locked. Nothing is decrypted, so there is nothing it could list.
+
+The dropdown renders in an open shadow root on the page, so the page can read what it shows: the login names and usernames for that website, or that Clyro is locked. Passwords are never rendered in it. A password is written into the page's fields only when the user picks a login.
 
 ## Auto-Save Security
 

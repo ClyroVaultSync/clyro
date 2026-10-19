@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Clyro Password Manager",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Zero-knowledge password manager. Encrypted on your device, stored where you choose: your own PC or your Google Drive.",
   "icons": {
     "16": "icons/icon-16.png",
